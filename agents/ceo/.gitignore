@@ -1,0 +1,19 @@
+# Elixir build artifacts
+/_build
+/deps
+/*.ez
+/ceo
+
+# Test artifacts
+/cover
+/doc
+
+# Development artifacts
+.elixir_ls
+.vscode
+
+# OS artifacts
+.DS_Store
+
+# Environment
+.env
