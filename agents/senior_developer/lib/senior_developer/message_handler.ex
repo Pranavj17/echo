@@ -1,0 +1,120 @@
+defmodule SeniorDeveloper.MessageHandler do
+  @moduledoc """
+  Handles incoming messages from other agents via Redis pub/sub.
+
+  Subscribes to:
+  - messages:senior_developer (direct messages)
+  - messages:all (broadcasts)
+  - messages:leadership (C-suite communications)
+  - decisions:* (decision events from engineering team)
+  """
+
+  use GenServer
+  require Logger
+
+  alias EchoShared.MessageBus
+
+  ## Client API
+
+  def start_link(opts \\ []) do
+    GenServer.start_link(__MODULE__, opts, name: __MODULE__)
+  end
+
+  ## Server Callbacks
+
+  @impl true
+  def init(_opts) do
+    Logger.info("SENIOR_DEVELOPER Message Handler started")
+
+    # Subscribe to SENIOR_DEVELOPER messages
+    {:ok, _} = MessageBus.subscribe_to_role(:senior_developer)
+
+    # Subscribe to decision events
+    Redix.PubSub.subscribe(:redix_pubsub, ["decisions:new", "decisions:escalated"], self())
+
+    {:ok, %{}}
+  end
+
+  @impl true
+  def handle_info({:redix_pubsub, :redix_pubsub, :message, %{channel: channel, payload: payload}}, state) do
+    case Jason.decode(payload) do
+      {:ok, message} ->
+        handle_message(channel, message)
+
+      {:error, reason} ->
+        Logger.error("Failed to decode message: #{inspect(reason)}")
+    end
+
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_info(_msg, state) do
+    {:noreply, state}
+  end
+
+  ## Private Functions
+
+  defp handle_message("messages:senior_developer", message) do
+    Logger.info("SENIOR_DEVELOPER received message: #{message["subject"]} from #{message["from"]}")
+
+    case message["type"] do
+      "request" -> handle_request(message)
+      "escalation" -> handle_escalation(message)
+      "notification" -> handle_notification(message)
+      _ -> Logger.warning("Unknown message type: #{message["type"]}")
+    end
+  end
+
+  defp handle_message("messages:all", message) do
+    Logger.info("SENIOR_DEVELOPER received broadcast: #{message["subject"]}")
+    # Process broadcasts if relevant to SENIOR_DEVELOPER
+  end
+
+  defp handle_message("messages:leadership", message) do
+    Logger.info("SENIOR_DEVELOPER received leadership message: #{message["subject"]}")
+    # Handle C-suite communications
+  end
+
+  defp handle_message("decisions:new", event) do
+    Logger.info("New decision initiated: #{event["decision_id"]} (#{event["type"]})")
+    # SENIOR_DEVELOPER can monitor technical decisions
+  end
+
+  defp handle_message("decisions:escalated", event) do
+    Logger.warning("Decision escalated: #{event["decision_id"]}")
+    # SENIOR_DEVELOPER should review technical escalations
+    handle_escalated_decision(event)
+  end
+
+  defp handle_message(_channel, _message) do
+    # Ignore other channels
+    :ok
+  end
+
+  defp handle_request(message) do
+    Logger.info("Processing request: #{message["subject"]}")
+    # TODO: Process requests based on content
+    # For now, just log and acknowledge
+  end
+
+  defp handle_escalation(message) do
+    Logger.warning("Escalation received: #{message["subject"]}")
+    # TODO: Handle escalations requiring SENIOR_DEVELOPER attention
+  end
+
+  defp handle_notification(message) do
+    Logger.debug("Notification: #{message["subject"]}")
+    # Process informational notifications
+  end
+
+  defp handle_escalated_decision(event) do
+    # Log escalated decision for SENIOR_DEVELOPER review
+    Logger.warning("""
+    ESCALATED DECISION REQUIRES SENIOR_DEVELOPER REVIEW
+    Decision ID: #{event["decision_id"]}
+    Reason: #{event["reason"]}
+    Urgency: #{event["urgency"]}
+    """)
+  end
+end
