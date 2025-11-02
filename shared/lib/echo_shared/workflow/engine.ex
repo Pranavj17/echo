@@ -160,10 +160,23 @@ defmodule EchoShared.Workflow.Engine do
         # Pause for human approval
         {:pause, %{execution | status: :paused, pause_reason: reason}}
 
-      {:decision, decision_data} ->
+      {:decision, _decision_data} ->
         # Record decision in database
         # TODO: Create decision record
         {:ok, execution}
+
+      {:parallel, steps} ->
+        # Execute steps in parallel
+        Logger.info("Executing #{length(steps)} steps in parallel")
+        Enum.each(steps, fn parallel_step ->
+          Task.start(fn -> execute_step(parallel_step, execution, nil) end)
+        end)
+        {:ok, execution}
+
+      {:conditional, condition_fn, true_step, false_step} ->
+        # Execute conditional branch
+        step_to_execute = if condition_fn.(execution.context), do: true_step, else: false_step
+        execute_step(step_to_execute, execution, nil)
 
       _ ->
         Logger.warning("Unknown step type: #{inspect(step)}")

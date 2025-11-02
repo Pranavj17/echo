@@ -19,7 +19,10 @@ defmodule EchoShared.Application do
       EchoShared.Repo,
 
       # Redis connection pool
-      {Redix, name: :redix, host: redis_host(), port: redis_port()}
+      {Redix, name: :redix, host: redis_host(), port: redis_port()},
+
+      # Workflow engine
+      EchoShared.Workflow.Engine
     ]
 
     opts = [strategy: :one_for_one, name: EchoShared.Supervisor]
