@@ -25,6 +25,7 @@ yarn-error.log
 .env
 .env.local
 .env.*.local
+.envrc.local
 
 # Operating System
 .DS_Store
@@ -57,6 +58,7 @@ logs/
 # Temporary files
 tmp/
 temp/
+.day1_pids
 
 # Build artifacts
 *.tar.gz
@@ -77,3 +79,66 @@ dump.rdb
 
 # CI/CD
 .github/workflows/*.secret.yml
+
+# Agent executables (escript builds)
+/agents/*/ceo
+/agents/*/cto
+/agents/*/chro
+/agents/*/operations_head
+/agents/*/product_manager
+/agents/*/senior_architect
+/agents/*/senior_developer
+/agents/*/test_lead
+/agents/*/uiux_engineer
+
+# Shared library build artifacts
+/shared/_build/
+/shared/deps/
+/shared/priv/
+/shared/doc/
+
+# Test artifacts
+/shared/test/
+/test/
+
+# Scripts
+/scripts/
+
+# Monitoring dashboard
+/monitor/
+
+# Documentation files (generated during development)
+ADD_ALL_AGENTS.md
+AGENT_BUILD_TEST_RESULTS.md
+AGENT_INTEGRATION_GUIDE.md
+CLAUDE_DESKTOP_GUIDE.md
+CLAUDE_DESKTOP_SETUP.md
+CLEANUP_COMPLETE.md
+CURIOSITY_AGENDA_SUCCESS.md
+DAY_1_*.md
+DEMO_GUIDE.md
+DISTRIBUTED_SYSTEMS_IMPROVEMENTS.md
+ECHO_SH_README.md
+HOW_*.md
+MONITORING_DASHBOARD*.md
+QUICK_REFERENCE.md
+REAL_*.md
+TESTING_*.md
+WEEK_1_*.md
+WHAT_*.md
+WHY_*.md
+
+# Configuration templates and examples
+claude_desktop_config_all_agents.json
+claude_desktop_config.template.json
+
+# Shell scripts
+echo.sh
+setup.sh
+test_agents.sh
+
+# Workflow examples (keep in version control but ignore output)
+/shared/workflows/
+
+# Direnv
+.direnv/
