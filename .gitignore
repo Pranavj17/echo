@@ -10,6 +10,11 @@ erl_crash.dump
 /config/*.secret.exs
 .elixir_ls/
 
+# Rust
+/target/
+**/*.rs.bk
+Cargo.lock
+
 # Mix
 mix.lock
 
