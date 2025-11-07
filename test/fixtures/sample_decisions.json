@@ -1,0 +1,38 @@
+[
+  {
+    "decision_type": "budget_approval",
+    "initiator_role": "ceo",
+    "participants": ["ceo", "cto", "operations_head"],
+    "mode": "collaborative",
+    "context": {
+      "amount": 500000,
+      "purpose": "New datacenter infrastructure",
+      "timeline": "Q3 2025"
+    },
+    "status": "pending"
+  },
+  {
+    "decision_type": "architecture_review",
+    "initiator_role": "senior_architect",
+    "participants": ["cto", "senior_architect", "senior_developer"],
+    "mode": "collaborative",
+    "context": {
+      "proposal": "Migrate to microservices architecture",
+      "impact": "high",
+      "timeline": "6 months"
+    },
+    "status": "approved"
+  },
+  {
+    "decision_type": "hiring_approval",
+    "initiator_role": "chro",
+    "participants": ["ceo", "chro", "cto"],
+    "mode": "hierarchical",
+    "context": {
+      "role": "Senior Staff Engineer",
+      "team": "Platform",
+      "budget_impact": 250000
+    },
+    "status": "escalated"
+  }
+]

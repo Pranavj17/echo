@@ -1,0 +1,40 @@
+{
+  "mcpServers": {
+    "echo-ceo": {
+      "command": "/ABSOLUTE/PATH/TO/echo/agents/ceo/ceo",
+      "env": {
+        "DB_HOST": "localhost",
+        "DB_PORT": "5432",
+        "DB_NAME": "echo_org_dev",
+        "DB_USER": "postgres",
+        "DB_PASSWORD": "postgres",
+        "REDIS_HOST": "localhost",
+        "REDIS_PORT": "6379"
+      }
+    },
+    "echo-cto": {
+      "command": "/ABSOLUTE/PATH/TO/echo/agents/cto/cto",
+      "env": {
+        "DB_HOST": "localhost",
+        "DB_PORT": "5432",
+        "DB_NAME": "echo_org_dev",
+        "DB_USER": "postgres",
+        "DB_PASSWORD": "postgres",
+        "REDIS_HOST": "localhost",
+        "REDIS_PORT": "6379"
+      }
+    },
+    "echo-product-manager": {
+      "command": "/ABSOLUTE/PATH/TO/echo/agents/product_manager/product_manager",
+      "env": {
+        "DB_HOST": "localhost",
+        "DB_PORT": "5432",
+        "DB_NAME": "echo_org_dev",
+        "DB_USER": "postgres",
+        "DB_PASSWORD": "postgres",
+        "REDIS_HOST": "localhost",
+        "REDIS_PORT": "6379"
+      }
+    }
+  }
+}

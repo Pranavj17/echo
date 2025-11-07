@@ -1,0 +1,25 @@
+{
+  "enableAllProjectMcpServers": true,
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/pranav/Documents/echo/.claude/hooks/session-start.sh"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/pranav/Documents/echo/.claude/hooks/session-end.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

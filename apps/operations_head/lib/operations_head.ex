@@ -1,0 +1,683 @@
+defmodule OperationsHead do
+  @moduledoc """
+  OPERATIONS_HEAD (Chief Technology Officer) MCP Server.
+
+  The OPERATIONS_HEAD is responsible for technology strategy, infrastructure architecture,
+  and engineering excellence in the ECHO organizational model.
+
+  ## Responsibilities
+  - Technology stack decisions and evaluation
+  - Infrastructure architecture and planning
+  - Engineering budget allocation and management
+  - Team structure and technical hiring
+  - Technical standards and code quality
+  - Engineering performance and metrics
+
+  ## Decision Authority
+  - Technology choices and stack decisions
+  - Infrastructure changes and architecture
+  - Engineering budget up to $500,000
+  - Team structure and hiring (engineering)
+  - Technical escalations from engineering team
+
+  ## MCP Tools
+  1. approve_technical_proposal - Review and approve technical designs
+  2. allocate_engineering_budget - Allocate engineering funds
+  3. review_architecture - Evaluate system architecture proposals
+  4. approve_infrastructure_change - Approve infrastructure modifications
+  5. review_engineering_metrics - Get team performance metrics
+  6. escalate_to_ceo - Escalate decisions requiring CEO approval
+  """
+
+  use EchoShared.MCP.Server
+  require Logger
+  import Ecto.Query
+
+  alias EchoShared.MessageBus
+  alias EchoShared.Schemas.Decision
+  alias EchoShared.Repo
+  alias EchoShared.LLM.DecisionHelper
+
+  @impl true
+  def agent_info do
+    %{
+      name: "operations_head",
+      version: "0.1.0",
+      role: :operations_head,
+      description: "Chief Technology Officer - Technology strategy and engineering excellence"
+    }
+  end
+
+  @impl true
+  def tools do
+    [
+      %{
+        name: "approve_technical_proposal",
+        description: "Review and approve a technical proposal or design document",
+        inputSchema: %{
+          type: "object",
+          properties: %{
+            proposal_id: %{
+              type: "string",
+              description: "The ID of the technical proposal to approve"
+            },
+            rationale: %{
+              type: "string",
+              description: "OPERATIONS_HEAD's rationale for the approval/rejection"
+            },
+            approved: %{
+              type: "boolean",
+              description: "Whether the proposal is approved"
+            },
+            conditions: %{
+              type: "array",
+              items: %{type: "string"},
+              description: "Any conditions or requirements for the approval (optional)"
+            }
+          },
+          required: ["proposal_id", "rationale", "approved"]
+        }
+      },
+      %{
+        name: "allocate_engineering_budget",
+        description: "Allocate budget for engineering initiatives or teams",
+        inputSchema: %{
+          type: "object",
+          properties: %{
+            recipient: %{
+              type: "string",
+              description: "The team or project receiving the budget"
+            },
+            amount: %{
+              type: "number",
+              description: "Budget amount in dollars"
+            },
+            purpose: %{
+              type: "string",
+              description: "Purpose of the budget allocation"
+            },
+            duration: %{
+              type: "string",
+              description: "Duration of budget (e.g., 'Q1 2025', 'Annual')"
+            }
+          },
+          required: ["recipient", "amount", "purpose"]
+        }
+      },
+      %{
+        name: "review_architecture",
+        description: "Review and evaluate a system architecture proposal",
+        inputSchema: %{
+          type: "object",
+          properties: %{
+            architecture_id: %{
+              type: "string",
+              description: "The ID of the architecture document to review"
+            },
+            components: %{
+              type: "array",
+              items: %{type: "string"},
+              description: "Key components in the architecture"
+            },
+            concerns: %{
+              type: "array",
+              items: %{type: "string"},
+              description: "Any concerns or issues to address (optional)"
+            },
+            recommendations: %{
+              type: "array",
+              items: %{type: "string"},
+              description: "Recommendations for improvement (optional)"
+            }
+          },
+          required: ["architecture_id", "components"]
+        }
+      },
+      %{
+        name: "approve_infrastructure_change",
+        description: "Approve changes to infrastructure (deployments, scaling, new services)",
+        inputSchema: %{
+          type: "object",
+          properties: %{
+            change_id: %{
+              type: "string",
+              description: "The ID of the infrastructure change request"
+            },
+            change_type: %{
+              type: "string",
+              enum: ["deployment", "scaling", "new_service", "configuration", "migration"],
+              description: "Type of infrastructure change"
+            },
+            approved: %{
+              type: "boolean",
+              description: "Whether the change is approved"
+            },
+            rationale: %{
+              type: "string",
+              description: "Rationale for the decision"
+            },
+            risk_assessment: %{
+              type: "string",
+              description: "Risk level assessment (low/medium/high)"
+            }
+          },
+          required: ["change_id", "change_type", "approved", "rationale"]
+        }
+      },
+      %{
+        name: "review_engineering_metrics",
+        description: "Review engineering team performance metrics and health",
+        inputSchema: %{
+          type: "object",
+          properties: %{
+            time_range: %{
+              type: "string",
+              description: "Time range for metrics (e.g., '24h', '7d', '30d', default: '7d')"
+            },
+            include_details: %{
+              type: "boolean",
+              description: "Include detailed breakdowns (default: true)"
+            }
+          }
+        }
+      },
+      %{
+        name: "escalate_to_ceo",
+        description: "Escalate a decision to CEO when it exceeds OPERATIONS_HEAD authority",
+        inputSchema: %{
+          type: "object",
+          properties: %{
+            decision_id: %{
+              type: "string",
+              description: "The decision ID to escalate"
+            },
+            reason: %{
+              type: "string",
+              description: "Why this decision requires CEO approval"
+            },
+            urgency: %{
+              type: "string",
+              enum: ["low", "medium", "high", "critical"],
+              description: "Urgency level for CEO response"
+            },
+            recommendation: %{
+              type: "string",
+              description: "OPERATIONS_HEAD's recommendation to CEO (optional)"
+            }
+          },
+          required: ["decision_id", "reason", "urgency"]
+        }
+      },
+      %{
+        name: "ai_consult",
+        description: "Consult AI advisor for insights and analysis",
+        inputSchema: %{
+          type: "object",
+          properties: %{
+            query_type: %{
+              type: "string",
+              enum: ["decision_analysis", "question", "option_evaluation"],
+              description: "Type of AI consultation"
+            },
+            question: %{
+              type: "string",
+              description: "The question or decision to analyze"
+            },
+            context: %{
+              type: "object",
+              description: "Additional context"
+            }
+          },
+          required: ["query_type", "question"]
+        }
+      }
+    ]
+  end
+
+  @impl true
+  def execute_tool("approve_technical_proposal", args) do
+    with {:ok, proposal_id} <- validate_required_string(args, "proposal_id"),
+         {:ok, rationale} <- validate_required_string(args, "rationale"),
+         {:ok, approved} <- validate_required_boolean(args, "approved"),
+         {:ok, decision} <- record_technical_decision(proposal_id, approved, rationale, args) do
+
+      # Notify relevant parties
+      notify_technical_decision(decision, approved)
+
+      result = """
+      Technical Proposal #{if approved, do: "Approved", else: "Rejected"}
+
+      Proposal ID: #{proposal_id}
+      Decision: #{if approved, do: "Approved", else: "Rejected"} by OPERATIONS_HEAD
+      Rationale: #{rationale}
+      Conditions: #{format_list(args["conditions"])}
+
+      The decision has been recorded and relevant teams have been notified.
+      """
+
+      {:ok, result}
+    else
+      {:error, reason} -> {:error, "Failed to process proposal: #{inspect(reason)}"}
+    end
+  end
+
+  def execute_tool("allocate_engineering_budget", args) do
+    with {:ok, recipient} <- validate_required_string(args, "recipient"),
+         {:ok, amount} <- validate_required_number(args, "amount"),
+         {:ok, purpose} <- validate_required_string(args, "purpose"),
+         :ok <- validate_budget_authority(amount),
+         {:ok, allocation} <- create_budget_allocation(recipient, amount, purpose, args) do
+
+      # Send budget notification
+      MessageBus.publish_message(
+        :operations_head,
+        :ceo,
+        :notification,
+        "OPERATIONS_HEAD Budget Allocation: $#{format_number(amount)}",
+        allocation
+      )
+
+      result = """
+      Engineering Budget Allocated
+
+      Recipient: #{recipient}
+      Amount: $#{format_number(amount)}
+      Purpose: #{purpose}
+      Duration: #{args["duration"] || "Not specified"}
+
+      The budget has been allocated and stakeholders have been notified.
+      """
+
+      {:ok, result}
+    else
+      {:error, :budget_limit_exceeded} ->
+        {:error, "Budget amount exceeds OPERATIONS_HEAD autonomous authority ($500,000). Requires CEO approval."}
+
+      {:error, reason} ->
+        {:error, "Failed to allocate budget: #{inspect(reason)}"}
+    end
+  end
+
+  def execute_tool("review_architecture", args) do
+    with {:ok, architecture_id} <- validate_required_string(args, "architecture_id"),
+         {:ok, components} <- validate_required(args, "components"),
+         {:ok, _review} <- create_architecture_review(architecture_id, components, args) do
+
+      result = """
+      Architecture Review Complete
+
+      Architecture ID: #{architecture_id}
+      Components Reviewed: #{Enum.join(components, ", ")}
+
+      Concerns:
+      #{format_bullet_list(args["concerns"])}
+
+      Recommendations:
+      #{format_bullet_list(args["recommendations"])}
+
+      The architecture review has been recorded and shared with the engineering team.
+      """
+
+      {:ok, result}
+    else
+      {:error, reason} -> {:error, "Failed to review architecture: #{inspect(reason)}"}
+    end
+  end
+
+  def execute_tool("approve_infrastructure_change", args) do
+    with {:ok, change_id} <- validate_required_string(args, "change_id"),
+         {:ok, change_type} <- validate_required_string(args, "change_type"),
+         {:ok, approved} <- validate_required_boolean(args, "approved"),
+         {:ok, rationale} <- validate_required_string(args, "rationale"),
+         {:ok, change_record} <- record_infrastructure_change(change_id, change_type, approved, rationale, args) do
+
+      # Notify operations and engineering teams
+      notify_infrastructure_change(change_record, approved)
+
+      result = """
+      Infrastructure Change #{if approved, do: "Approved", else: "Rejected"}
+
+      Change ID: #{change_id}
+      Type: #{change_type}
+      Decision: #{if approved, do: "Approved", else: "Rejected"} by OPERATIONS_HEAD
+      Rationale: #{rationale}
+      Risk Assessment: #{args["risk_assessment"] || "Not specified"}
+
+      The infrastructure change decision has been communicated to relevant teams.
+      """
+
+      {:ok, result}
+    else
+      {:error, reason} -> {:error, "Failed to process infrastructure change: #{inspect(reason)}"}
+    end
+  end
+
+  def execute_tool("review_engineering_metrics", args) do
+    time_range = Map.get(args, "time_range", "7d")
+    include_details = Map.get(args, "include_details", true)
+
+    with {:ok, metrics} <- get_engineering_metrics(time_range, include_details) do
+      result = format_engineering_metrics(metrics, time_range, include_details)
+      {:ok, result}
+    else
+      {:error, reason} -> {:error, "Failed to retrieve metrics: #{inspect(reason)}"}
+    end
+  end
+
+  def execute_tool("escalate_to_ceo", args) do
+    with {:ok, decision_id} <- validate_required_string(args, "decision_id"),
+         {:ok, reason} <- validate_required_string(args, "reason"),
+         {:ok, urgency} <- validate_required_string(args, "urgency"),
+         {:ok, decision} <- load_decision(decision_id),
+         {:ok, escalated} <- escalate_decision_to_ceo(decision, reason, urgency, args) do
+
+      # Send escalation to CEO
+      MessageBus.publish_message(
+        :operations_head,
+        :ceo,
+        :escalation,
+        "Technical Decision Escalation: #{decision_id}",
+        escalated
+      )
+
+      result = """
+      Decision Escalated to CEO
+
+      Decision ID: #{decision_id}
+      Urgency: #{urgency}
+      Reason: #{reason}
+      OPERATIONS_HEAD Recommendation: #{args["recommendation"] || "None provided"}
+
+      The decision has been escalated to the CEO for final approval.
+      """
+
+      {:ok, result}
+    else
+      {:error, reason} -> {:error, "Failed to escalate decision: #{inspect(reason)}"}
+    end
+  end
+
+  def execute_tool("ai_consult", args) do
+    with {:ok, query_type} <- validate_required_string(args, "query_type"),
+         {:ok, question} <- validate_required_string(args, "question") do
+      context = args["context"] || %{}
+
+      result = case query_type do
+        "decision_analysis" ->
+          decision_context = Map.merge(context, %{
+            decision_type: context["decision_type"] || "general",
+            context: question
+          })
+          DecisionHelper.analyze_decision(:operations_head, decision_context)
+
+        "option_evaluation" ->
+          evaluation_context = %{
+            question: question,
+            options: context["options"] || [],
+            criteria: context["criteria"]
+          }
+          DecisionHelper.evaluate_options(:operations_head, evaluation_context)
+
+        "question" ->
+          DecisionHelper.consult(:operations_head, question, context["additional_context"])
+
+        _ ->
+          {:error, "Unknown query type: #{query_type}"}
+      end
+
+      case result do
+        {:ok, response} ->
+          {:ok, "AI Consultation Result:\n\n" <> response}
+        {:error, :llm_disabled} ->
+          {:ok, "AI consultation disabled. Enable with OPERATIONS_HEAD_LLM_ENABLED=true"}
+        {:error, reason} ->
+          {:error, "AI consultation failed: #{inspect(reason)}"}
+      end
+    end
+  end
+
+  def execute_tool(name, _args) do
+    {:error, "Unknown tool: #{name}"}
+  end
+
+  ## Private Functions
+
+  defp load_decision(decision_id) do
+    case Repo.get(Decision, decision_id) do
+      nil -> {:error, :decision_not_found}
+      decision -> {:ok, decision}
+    end
+  end
+
+  defp record_technical_decision(proposal_id, approved, rationale, args) do
+    attrs = %{
+      decision_type: "technical_proposal",
+      initiator_role: "operations_head",
+      mode: :autonomous,
+      status: if(approved, do: :approved, else: :rejected),
+      context: %{
+        proposal_id: proposal_id,
+        approved: approved,
+        conditions: args["conditions"] || []
+      },
+      outcome: %{
+        approved_by: "operations_head",
+        rationale: rationale,
+        decided_at: DateTime.utc_now()
+      },
+      completed_at: if(approved || !approved, do: DateTime.utc_now(), else: nil)
+    }
+
+    %Decision{}
+    |> Decision.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  defp create_budget_allocation(recipient, amount, purpose, args) do
+    allocation = %{
+      recipient: recipient,
+      amount: amount,
+      purpose: purpose,
+      duration: args["duration"],
+      allocated_by: "operations_head",
+      allocated_at: DateTime.utc_now()
+    }
+
+    {:ok, allocation}
+  end
+
+  defp create_architecture_review(architecture_id, components, args) do
+    review = %{
+      architecture_id: architecture_id,
+      components: components,
+      concerns: args["concerns"] || [],
+      recommendations: args["recommendations"] || [],
+      reviewed_by: "operations_head",
+      reviewed_at: DateTime.utc_now()
+    }
+
+    {:ok, review}
+  end
+
+  defp record_infrastructure_change(change_id, change_type, approved, rationale, args) do
+    attrs = %{
+      decision_type: "infrastructure_change",
+      initiator_role: "operations_head",
+      mode: :autonomous,
+      status: if(approved, do: :approved, else: :rejected),
+      context: %{
+        change_id: change_id,
+        change_type: change_type,
+        risk_assessment: args["risk_assessment"]
+      },
+      outcome: %{
+        approved: approved,
+        rationale: rationale,
+        decided_by: "operations_head",
+        decided_at: DateTime.utc_now()
+      },
+      completed_at: DateTime.utc_now()
+    }
+
+    %Decision{}
+    |> Decision.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  defp escalate_decision_to_ceo(decision, reason, urgency, args) do
+    attrs = %{
+      status: :escalated,
+      metadata: Map.merge(decision.metadata || %{}, %{
+        escalated_by: "operations_head",
+        escalated_to: "ceo",
+        reason: reason,
+        urgency: urgency,
+        recommendation: args["recommendation"],
+        escalated_at: DateTime.utc_now()
+      })
+    }
+
+    decision
+    |> Decision.changeset(attrs)
+    |> Repo.update()
+  end
+
+  defp get_engineering_metrics(time_range, _include_details) do
+    hours = parse_time_range(time_range)
+    cutoff = DateTime.utc_now() |> DateTime.add(-hours * 3600, :second)
+
+    technical_decisions =
+      Repo.one(
+        from d in Decision,
+          where: d.initiator_role == "operations_head" and d.inserted_at >= ^cutoff,
+          select: count(d.id)
+      ) || 0
+
+    approved_decisions =
+      Repo.one(
+        from d in Decision,
+          where: d.initiator_role == "operations_head" and d.inserted_at >= ^cutoff and d.status == :approved,
+          select: count(d.id)
+      ) || 0
+
+    metrics = %{
+      time_range: time_range,
+      technical_decisions: technical_decisions,
+      approved_decisions: approved_decisions,
+      approval_rate: if(technical_decisions > 0, do: Float.round(approved_decisions / technical_decisions * 100, 1), else: 0)
+    }
+
+    {:ok, metrics}
+  end
+
+  defp format_engineering_metrics(metrics, time_range, _include_details) do
+    """
+    Engineering Metrics Report
+
+    Time Range: #{time_range}
+
+    Decision Making:
+      - Technical decisions made: #{metrics.technical_decisions}
+      - Decisions approved: #{metrics.approved_decisions}
+      - Approval rate: #{metrics.approval_rate}%
+
+    Overall Status: #{if metrics.approval_rate >= 70, do: "Healthy", else: "Needs Attention"}
+    """
+  end
+
+  defp validate_budget_authority(amount) do
+    limit = Application.get_env(:operations_head, :autonomous_budget_limit, 500_000)
+
+    if amount <= limit do
+      :ok
+    else
+      {:error, :budget_limit_exceeded}
+    end
+  end
+
+  defp notify_technical_decision(decision, approved) do
+    MessageBus.broadcast_message(
+      :operations_head,
+      :notification,
+      "Technical Proposal #{if approved, do: "Approved", else: "Rejected"}",
+      %{decision_id: decision.id, status: decision.status}
+    )
+
+    MessageBus.publish_decision_event(
+      :completed,
+      %{decision_id: decision.id, type: "technical_proposal"}
+    )
+  end
+
+  defp notify_infrastructure_change(change_record, approved) do
+    MessageBus.publish_message(
+      :operations_head,
+      :operations_head,
+      :notification,
+      "Infrastructure Change #{if approved, do: "Approved", else: "Rejected"}",
+      %{decision_id: change_record.id, status: change_record.status}
+    )
+
+    MessageBus.broadcast_message(
+      :operations_head,
+      :notification,
+      "Infrastructure Change Decision",
+      %{decision_id: change_record.id, approved: approved}
+    )
+  end
+
+  defp parse_time_range("24h"), do: 24
+  defp parse_time_range("7d"), do: 24 * 7
+  defp parse_time_range("30d"), do: 24 * 30
+  defp parse_time_range(_), do: 24 * 7
+
+  defp format_list(nil), do: "None"
+  defp format_list([]), do: "None"
+  defp format_list(list), do: Enum.join(list, ", ")
+
+  defp format_bullet_list(nil), do: "  - None"
+  defp format_bullet_list([]), do: "  - None"
+  defp format_bullet_list(items) do
+    items
+    |> Enum.map(&"  - #{&1}")
+    |> Enum.join("\n")
+  end
+
+  defp format_number(num) when is_number(num) do
+    num
+    |> trunc()
+    |> Integer.to_string()
+    |> String.replace(~r/\B(?=(\d{3})+(?!\d))/, ",")
+  end
+
+  defp validate_required_number(args, key) do
+    case Map.get(args, key) do
+      nil -> {:error, "Missing required field: #{key}"}
+      value when is_number(value) -> {:ok, value}
+      _ -> {:error, "Field #{key} must be a number"}
+    end
+  end
+
+  defp validate_required_boolean(args, key) do
+    case Map.get(args, key) do
+      nil -> {:error, "Missing required field: #{key}"}
+      value when is_boolean(value) -> {:ok, value}
+      _ -> {:error, "Field #{key} must be a boolean"}
+    end
+  end
+
+  defp validate_required(args, key) do
+    case Map.get(args, key) do
+      nil -> {:error, "Missing required field: #{key}"}
+      value -> {:ok, value}
+    end
+  end
+
+  defp validate_required_string(args, key) do
+    case Map.get(args, key) do
+      nil -> {:error, "Missing required field: #{key}"}
+      value when is_binary(value) -> {:ok, value}
+      _ -> {:error, "Field #{key} must be a string"}
+    end
+  end
+end

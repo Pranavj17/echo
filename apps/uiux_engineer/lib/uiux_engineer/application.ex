@@ -1,0 +1,32 @@
+defmodule UiuxEngineer.Application do
+  @moduledoc """
+  OTP Application for the UI_UX_ENGINEER agent.
+  """
+
+  use Application
+  require Logger
+
+  @impl true
+  def start(_type, _args) do
+    Logger.info("Starting UI_UX_ENGINEER Agent...")
+
+    children = [
+      %{
+        id: Redix.PubSub,
+        start: {Redix.PubSub, :start_link, [[name: :redix_pubsub, host: redis_host(), port: redis_port()]]}
+      },
+
+      # Heartbeat worker
+      {EchoShared.HeartbeatWorker, role: :uiux_engineer, metadata: %{version: "1.0.0"}},
+
+      UiuxEngineer.DecisionEngine,
+      UiuxEngineer.MessageHandler
+    ]
+
+    opts = [strategy: :one_for_one, name: UiuxEngineer.Supervisor]
+    Supervisor.start_link(children, opts)
+  end
+
+  defp redis_host, do: System.get_env("REDIS_HOST", "localhost")
+  defp redis_port, do: String.to_integer(System.get_env("REDIS_PORT", "6383"))
+end

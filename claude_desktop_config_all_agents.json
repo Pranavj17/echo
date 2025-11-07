@@ -1,0 +1,112 @@
+{
+  "mcpServers": {
+    "echo-ceo": {
+      "command": "/Users/pranav/Documents/echo/agents/ceo/ceo",
+      "env": {
+        "DB_HOST": "localhost",
+        "DB_PORT": "5432",
+        "DB_NAME": "echo_org_dev",
+        "DB_USER": "postgres",
+        "DB_PASSWORD": "postgres",
+        "REDIS_HOST": "localhost",
+        "REDIS_PORT": "6379"
+      }
+    },
+    "echo-cto": {
+      "command": "/Users/pranav/Documents/echo/agents/cto/cto",
+      "env": {
+        "DB_HOST": "localhost",
+        "DB_PORT": "5432",
+        "DB_NAME": "echo_org_dev",
+        "DB_USER": "postgres",
+        "DB_PASSWORD": "postgres",
+        "REDIS_HOST": "localhost",
+        "REDIS_PORT": "6379"
+      }
+    },
+    "echo-chro": {
+      "command": "/Users/pranav/Documents/echo/agents/chro/chro",
+      "env": {
+        "DB_HOST": "localhost",
+        "DB_PORT": "5432",
+        "DB_NAME": "echo_org_dev",
+        "DB_USER": "postgres",
+        "DB_PASSWORD": "postgres",
+        "REDIS_HOST": "localhost",
+        "REDIS_PORT": "6379"
+      }
+    },
+    "echo-operations-head": {
+      "command": "/Users/pranav/Documents/echo/agents/operations_head/operations_head",
+      "env": {
+        "DB_HOST": "localhost",
+        "DB_PORT": "5432",
+        "DB_NAME": "echo_org_dev",
+        "DB_USER": "postgres",
+        "DB_PASSWORD": "postgres",
+        "REDIS_HOST": "localhost",
+        "REDIS_PORT": "6379"
+      }
+    },
+    "echo-product-manager": {
+      "command": "/Users/pranav/Documents/echo/agents/product_manager/product_manager",
+      "env": {
+        "DB_HOST": "localhost",
+        "DB_PORT": "5432",
+        "DB_NAME": "echo_org_dev",
+        "DB_USER": "postgres",
+        "DB_PASSWORD": "postgres",
+        "REDIS_HOST": "localhost",
+        "REDIS_PORT": "6379"
+      }
+    },
+    "echo-senior-architect": {
+      "command": "/Users/pranav/Documents/echo/agents/senior_architect/senior_architect",
+      "env": {
+        "DB_HOST": "localhost",
+        "DB_PORT": "5432",
+        "DB_NAME": "echo_org_dev",
+        "DB_USER": "postgres",
+        "DB_PASSWORD": "postgres",
+        "REDIS_HOST": "localhost",
+        "REDIS_PORT": "6379"
+      }
+    },
+    "echo-ui-ux-engineer": {
+      "command": "/Users/pranav/Documents/echo/agents/uiux_engineer/uiux_engineer",
+      "env": {
+        "DB_HOST": "localhost",
+        "DB_PORT": "5432",
+        "DB_NAME": "echo_org_dev",
+        "DB_USER": "postgres",
+        "DB_PASSWORD": "postgres",
+        "REDIS_HOST": "localhost",
+        "REDIS_PORT": "6379"
+      }
+    },
+    "echo-senior-developer": {
+      "command": "/Users/pranav/Documents/echo/agents/senior_developer/senior_developer",
+      "env": {
+        "DB_HOST": "localhost",
+        "DB_PORT": "5432",
+        "DB_NAME": "echo_org_dev",
+        "DB_USER": "postgres",
+        "DB_PASSWORD": "postgres",
+        "REDIS_HOST": "localhost",
+        "REDIS_PORT": "6379"
+      }
+    },
+    "echo-test-lead": {
+      "command": "/Users/pranav/Documents/echo/agents/test_lead/test_lead",
+      "env": {
+        "DB_HOST": "localhost",
+        "DB_PORT": "5432",
+        "DB_NAME": "echo_org_dev",
+        "DB_USER": "postgres",
+        "DB_PASSWORD": "postgres",
+        "REDIS_HOST": "localhost",
+        "REDIS_PORT": "6379"
+      }
+    }
+  }
+}

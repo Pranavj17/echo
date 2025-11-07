@@ -1,0 +1,39 @@
+[
+  {
+    "from_role": "ceo",
+    "to_role": "cto",
+    "type": "request",
+    "subject": "Q3 Technology Strategy Review",
+    "content": {
+      "question": "What are our top 3 technology priorities for Q3?",
+      "deadline": "2025-11-10",
+      "context": "Board meeting preparation"
+    }
+  },
+  {
+    "from_role": "product_manager",
+    "to_role": "senior_architect",
+    "type": "request",
+    "subject": "Architecture design for user dashboard",
+    "content": {
+      "feature": "User analytics dashboard",
+      "requirements": [
+        "Real-time data updates",
+        "Support 10K concurrent users",
+        "Sub-second query response"
+      ],
+      "priority": "high"
+    }
+  },
+  {
+    "from_role": "test_lead",
+    "to_role": "senior_developer",
+    "type": "notification",
+    "subject": "Test failures in authentication module",
+    "content": {
+      "failing_tests": 3,
+      "test_suite": "auth_integration_test",
+      "error_message": "Connection timeout to auth service"
+    }
+  }
+]

@@ -1,3 +1,11 @@
+# ============================================
+# ECHO Umbrella Project .gitignore
+# ============================================
+# Structure: Root mix.lock is tracked
+#            Individual app mix.locks are ignored
+#            Shared _build/ and deps/ at root
+# ============================================
+
 # Elixir
 /_build/
 /cover/
@@ -10,8 +18,8 @@ erl_crash.dump
 /config/*.secret.exs
 .elixir_ls/
 
-# Mix
-mix.lock
+# Mix (Umbrella project - keep root mix.lock, ignore app mix.locks)
+/apps/*/mix.lock
 
 # Ecto
 /priv/repo/migrations/*.exs.swp
@@ -54,6 +62,7 @@ docker-compose.override.yml
 # Logs
 *.log
 logs/
+/apps/echo_monitor/logs/
 
 # Temporary files
 tmp/
@@ -80,65 +89,46 @@ dump.rdb
 # CI/CD
 .github/workflows/*.secret.yml
 
-# Agent executables (escript builds)
-/agents/*/ceo
-/agents/*/cto
-/agents/*/chro
-/agents/*/operations_head
-/agents/*/product_manager
-/agents/*/senior_architect
-/agents/*/senior_developer
-/agents/*/test_lead
-/agents/*/uiux_engineer
+# Agent executables (escript builds) - Umbrella structure
+/apps/ceo/ceo
+/apps/cto/cto
+/apps/chro/chro
+/apps/operations_head/operations_head
+/apps/product_manager/product_manager
+/apps/senior_architect/senior_architect
+/apps/senior_developer/senior_developer
+/apps/test_lead/test_lead
+/apps/uiux_engineer/uiux_engineer
 
-# Shared library build artifacts
-/shared/_build/
-/shared/deps/
-/shared/priv/
-/shared/doc/
+# Individual app build artifacts (umbrella uses shared _build/deps at root)
+/apps/*/_build/
+/apps/*/deps/
 
-# Test artifacts
-/shared/test/
-/test/
+# Deprecated backup directory
+deprecated_backup_*/
 
-# Scripts
-/scripts/
+# Training output and temporary files
+training/
+benchmark_models/
 
-# Monitoring dashboard
+# Old directory structure (pre-umbrella migration)
+# These should not exist but ignore just in case
+/agents/
+/shared/
 /monitor/
-
-# Documentation files (generated during development)
-ADD_ALL_AGENTS.md
-AGENT_BUILD_TEST_RESULTS.md
-AGENT_INTEGRATION_GUIDE.md
-CLAUDE_DESKTOP_GUIDE.md
-CLAUDE_DESKTOP_SETUP.md
-CLEANUP_COMPLETE.md
-CURIOSITY_AGENDA_SUCCESS.md
-DAY_1_*.md
-DEMO_GUIDE.md
-DISTRIBUTED_SYSTEMS_IMPROVEMENTS.md
-ECHO_SH_README.md
-HOW_*.md
-MONITORING_DASHBOARD*.md
-QUICK_REFERENCE.md
-REAL_*.md
-TESTING_*.md
-WEEK_1_*.md
-WHAT_*.md
-WHY_*.md
-
-# Configuration templates and examples
-claude_desktop_config_all_agents.json
-claude_desktop_config.template.json
-
-# Shell scripts
-echo.sh
-setup.sh
-test_agents.sh
-
-# Workflow examples (keep in version control but ignore output)
-/shared/workflows/
 
 # Direnv
 .direnv/
+
+# ============================================
+# IMPORTANT: What IS tracked in version control
+# ============================================
+# ✓ /mix.exs (root umbrella config)
+# ✓ /mix.lock (root umbrella lockfile)
+# ✓ /apps/*/ (all umbrella apps)
+# ✓ /config/ (shared configuration)
+# ✓ /docs/ (documentation)
+# ✓ /workflows/ (workflow definitions)
+# ✓ /scripts/ (utility scripts)
+# ✓ All source code in apps/*/lib/
+# ============================================
