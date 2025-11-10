@@ -47,8 +47,21 @@ fi
 
 # Check Ollama models
 OLLAMA_COUNT="0"
+DEEPSEEK_STATUS="❌ Not available"
 if command -v ollama &> /dev/null; then
   OLLAMA_COUNT=$(ollama list 2>/dev/null | grep -E "qwen|deepseek|llama|mistral|codellama" | wc -l | tr -d ' ')
+
+  # Check if deepseek-coder:6.7b is available for dual-perspective workflow
+  if ollama list 2>/dev/null | grep -q "deepseek-coder:6.7b"; then
+    # Test if Ollama API is responsive
+    if curl -s -m 5 http://localhost:11434/api/tags &>/dev/null; then
+      DEEPSEEK_STATUS="✅ Active (dual-perspective mode enabled)"
+    else
+      DEEPSEEK_STATUS="⚠️  Model installed but API not responding"
+    fi
+  else
+    DEEPSEEK_STATUS="❌ Model not installed"
+  fi
 fi
 
 # Build boot info
@@ -62,10 +75,14 @@ BOOT_INFO=$(cat <<EOF
 📦 Agents: 9 (CEO, CTO, CHRO, Ops, PM, Architect, UI/UX, Dev, Test)
 
 🤖 LLM Models: ${OLLAMA_COUNT} installed
+  Local LLM (deepseek-coder:6.7b): ${DEEPSEEK_STATUS}
 
 📝 Last 24h Activity:
   Decisions: ${DECISION_STATS}
   Messages: ${MESSAGE_STATS}
+
+💡 Dual-Perspective Mode: See CLAUDE.md Rule 8
+   All responses include both Local LLM + Claude analysis
 EOF
 )
 

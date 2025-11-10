@@ -96,6 +96,26 @@ echo/
 - Messages must also persist to PostgreSQL
 - Never bypass the message bus for direct communication
 
+### Rule 8: Local LLM Integration (Dual Perspective Workflow)
+- **ALWAYS** query local Ollama LLM (deepseek-coder:6.7b) before responding to user requests
+- Present both perspectives separately in this format:
+  ```
+  🤖 Local LLM (deepseek-coder:6.7b):
+  [LLM's response]
+
+  💭 My Analysis:
+  [Claude's response]
+  ```
+- Query endpoint: `http://localhost:11434/api/generate`
+- Send context including:
+  - User's question/task
+  - Relevant code snippets
+  - ECHO project context
+  - Current understanding
+- Use `"stream": false` for synchronous responses
+- Timeout: 30 seconds for LLM queries
+- This provides dual AI perspectives: local specialized coding model + Claude's analysis
+
 ## 🚀 Quick Start Commands
 
 ### First Time Setup
