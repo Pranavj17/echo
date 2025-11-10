@@ -10,6 +10,7 @@ config :echo_shared, EchoShared.Repo,
   password: "postgres",
   hostname: "localhost",
   port: 5433,  # Docker maps PostgreSQL 5432 -> 5433
+  pool: DBConnection.ConnectionPool,  # Default pool for dev
   show_sensitive_data_on_connection_error: true
 
 # Redis configuration for development

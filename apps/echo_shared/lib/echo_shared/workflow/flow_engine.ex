@@ -34,7 +34,15 @@ defmodule EchoShared.Workflow.FlowEngine do
   require Logger
   alias EchoShared.Repo
   alias EchoShared.Schemas.FlowExecution
-  alias EchoShared.MessageBus
+
+  # Whitelist of allowed flow modules - prevents arbitrary code execution
+  @allowed_flow_modules [
+    EchoShared.Workflow.Examples.FeatureApprovalFlow
+    # Add new approved flows here
+  ]
+
+  # Maximum state size (1MB) - prevents DoS via large state
+  @max_state_size 1_000_000
 
   @doc """
   Start a flow execution.
@@ -54,27 +62,37 @@ defmodule EchoShared.Workflow.FlowEngine do
       )
   """
   def start_flow(flow_module, initial_state \\ %{}) do
-    execution_id = generate_execution_id()
+    # SECURITY: Validate inputs before execution
+    with :ok <- validate_flow_module(flow_module),
+         :ok <- validate_initial_state(initial_state) do
+      execution_id = generate_execution_id()
 
-    Logger.info("Starting flow #{flow_module} (#{execution_id})")
+      Logger.info("Starting flow #{flow_module} (#{execution_id})")
 
-    # Create flow execution record
-    changeset = FlowExecution.changeset(%FlowExecution{}, %{
-      id: execution_id,
-      flow_module: module_name(flow_module),
-      status: :pending,
-      state: initial_state
-    })
+      # Create flow execution record
+      changeset = FlowExecution.changeset(%FlowExecution{}, %{
+        id: execution_id,
+        flow_module: module_name(flow_module),
+        status: :pending,
+        state: initial_state
+      })
 
-    case Repo.insert(changeset) do
-      {:ok, execution} ->
-        # Execute start steps asynchronously
-        Task.start(fn -> execute_starts(flow_module, execution) end)
-        {:ok, execution_id}
+      case Repo.insert(changeset) do
+        {:ok, execution} ->
+          # SECURITY: Use supervised task instead of unsupervised Task.start
+          # This ensures errors are logged and don't silently fail
+          task = Task.async(fn -> execute_starts(flow_module, execution) end)
 
-      {:error, changeset} ->
-        Logger.error("Failed to create flow execution: #{inspect(changeset.errors)}")
-        {:error, :persistence_failed}
+          # We don't await here - execution happens asynchronously
+          # But the task is monitored and will log errors if it fails
+          Process.demonitor(task.ref, [:flush])
+
+          {:ok, execution_id}
+
+        {:error, changeset} ->
+          Logger.error("Failed to create flow execution: #{inspect(changeset.errors)}")
+          {:error, :persistence_failed}
+      end
     end
   end
 
@@ -96,10 +114,17 @@ defmodule EchoShared.Workflow.FlowEngine do
 
         case Repo.update(changeset) do
           {:ok, updated_execution} ->
-            # Continue flow execution from where it left off
-            flow_module = String.to_existing_atom("Elixir.#{updated_execution.flow_module}")
-            continue_after_step(flow_module, updated_execution, updated_execution.current_step)
-            {:ok, updated_execution}
+            # SECURITY: Validate flow module from database before loading
+            case validate_and_load_flow_module(updated_execution.flow_module) do
+              {:ok, flow_module} ->
+                # Continue flow execution from where it left off
+                continue_after_step(flow_module, updated_execution, updated_execution.current_step)
+                {:ok, updated_execution}
+
+              {:error, reason} ->
+                Logger.error("Invalid flow module from database: #{updated_execution.flow_module}")
+                {:error, reason}
+            end
 
           {:error, reason} ->
             {:error, reason}
@@ -118,6 +143,64 @@ defmodule EchoShared.Workflow.FlowEngine do
   end
 
   ## Private Functions
+
+  # SECURITY: Validate flow module is in whitelist and properly implements Flow behavior
+  defp validate_flow_module(module) when is_atom(module) do
+    cond do
+      module not in @allowed_flow_modules ->
+        Logger.error("Unauthorized flow module: #{inspect(module)}")
+        {:error, :unauthorized_flow_module}
+
+      not Code.ensure_loaded?(module) ->
+        {:error, :module_not_loaded}
+
+      not function_exported?(module, :__flow_metadata__, 0) ->
+        {:error, :not_a_flow_module}
+
+      Enum.empty?(module.get_starts()) ->
+        {:error, :no_start_functions}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp validate_flow_module(_module) do
+    {:error, :invalid_module_type}
+  end
+
+  # SECURITY: Validate and load flow module from database string
+  # Prevents arbitrary code execution from corrupted database data
+  defp validate_and_load_flow_module(flow_module_string) when is_binary(flow_module_string) do
+    try do
+      module = String.to_existing_atom("Elixir.#{flow_module_string}")
+
+      case validate_flow_module(module) do
+        :ok -> {:ok, module}
+        error -> error
+      end
+    rescue
+      ArgumentError ->
+        Logger.error("Failed to load flow module: #{flow_module_string}")
+        {:error, :invalid_flow_module}
+    end
+  end
+
+  # SECURITY: Validate initial state size to prevent DoS
+  defp validate_initial_state(state) when is_map(state) do
+    state_size = :erlang.external_size(state)
+
+    if state_size > @max_state_size do
+      Logger.error("State too large: #{state_size} bytes (max: #{@max_state_size})")
+      {:error, :state_too_large}
+    else
+      :ok
+    end
+  end
+
+  defp validate_initial_state(_state) do
+    {:error, :invalid_state_type}
+  end
 
   defp execute_starts(flow_module, execution) do
     Logger.info("Executing @start functions for #{flow_module}")

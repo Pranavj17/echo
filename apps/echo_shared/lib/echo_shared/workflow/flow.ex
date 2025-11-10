@@ -71,12 +71,14 @@ defmodule EchoShared.Workflow.Flow do
   """
   defmacro __using__(_opts) do
     quote do
-      import EchoShared.Workflow.Flow
-
       Module.register_attribute(__MODULE__, :flow_starts, accumulate: true)
       Module.register_attribute(__MODULE__, :flow_routers, accumulate: true)
       Module.register_attribute(__MODULE__, :flow_listeners, accumulate: true)
+      Module.register_attribute(__MODULE__, :start, accumulate: false)
+      Module.register_attribute(__MODULE__, :router, accumulate: false)
+      Module.register_attribute(__MODULE__, :listen, accumulate: false)
 
+      @on_definition EchoShared.Workflow.Flow
       @before_compile EchoShared.Workflow.Flow
 
       @doc """
@@ -90,100 +92,29 @@ defmodule EchoShared.Workflow.Flow do
     end
   end
 
-  @doc """
-  Marks a function as a flow entry point.
-
-  Start functions execute automatically when the flow begins. Multiple start
-  functions can be defined and will execute in parallel.
-
-  ## Examples
-
-      @start
-      def initialize(state) do
-        Map.put(state, :initialized, true)
+  @doc false
+  def __on_definition__(env, kind, name, args, _guards, _body) do
+    if kind in [:def, :defp] and length(args) == 1 do
+      # Check if @start was set
+      if Module.get_attribute(env.module, :start) do
+        Module.put_attribute(env.module, :flow_starts, {name, 1})
+        Module.delete_attribute(env.module, :start)
       end
 
-      @start
-      def load_data(state) do
-        Map.put(state, :data, fetch_data())
+      # Check if @router was set
+      if after_step = Module.get_attribute(env.module, :router) do
+        Module.put_attribute(env.module, :flow_routers, {{name, 1}, after_step})
+        Module.delete_attribute(env.module, :router)
       end
-  """
-  defmacro start(do: block) do
-    quote do
-      def unquote(:"__flow_start__")(state) do
-        unquote(block)
+
+      # Check if @listen was set
+      if trigger = Module.get_attribute(env.module, :listen) do
+        Module.put_attribute(env.module, :flow_listeners, {{name, 1}, trigger})
+        Module.delete_attribute(env.module, :listen)
       end
     end
   end
 
-  @doc """
-  Marks a function as a start entry point.
-
-  Place this attribute directly above your start function.
-
-  ## Example
-
-      @start
-      def my_start_function(state) do
-        # initialization logic
-        state
-      end
-  """
-  defmacro start do
-    quote do
-      @flow_starts {__ENV__.function, __ENV__.module}
-    end
-  end
-
-  @doc """
-  Defines conditional routing logic.
-
-  Router functions are called after a specific step completes and return a
-  string label that determines which listener to trigger next.
-
-  ## Example
-
-      @router :analyze_request
-      def route_decision(state) do
-        if state.cost > 1_000_000 do
-          "ceo_approval"
-        else
-          "auto_approve"
-        end
-      end
-  """
-  defmacro router(after_step) do
-    quote do
-      @flow_routers {__ENV__.function, unquote(after_step)}
-    end
-  end
-
-  @doc """
-  Defines an event listener that executes when triggered.
-
-  Listeners are triggered by:
-  - Router returning a matching label (string)
-  - Another step completing (atom referencing step name)
-
-  ## Examples
-
-      @listen "ceo_approval"
-      def handle_ceo_approval(state) do
-        # This runs when router returns "ceo_approval"
-        state
-      end
-
-      @listen :step_name
-      def after_step(state) do
-        # This runs after :step_name completes
-        state
-      end
-  """
-  defmacro listen(trigger) do
-    quote do
-      @flow_listeners {__ENV__.function, unquote(trigger)}
-    end
-  end
 
   @doc """
   Compile-time validation of flow definition.

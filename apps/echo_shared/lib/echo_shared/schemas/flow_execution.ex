@@ -50,12 +50,19 @@ defmodule EchoShared.Schemas.FlowExecution do
     field :error, :string
     field :pause_reason, :string
 
+    # Optimistic locking - prevents race conditions
+    field :version, :integer, default: 1
+
     timestamps(type: :utc_datetime)
     field :completed_at, :utc_datetime
   end
 
   @doc """
   Changeset for creating/updating flow execution.
+
+  ## Optimistic Locking
+  Uses version field to prevent race conditions when multiple processes
+  try to update the same flow execution simultaneously.
   """
   def changeset(execution, attrs) do
     execution
@@ -71,11 +78,13 @@ defmodule EchoShared.Schemas.FlowExecution do
       :awaited_response,
       :error,
       :pause_reason,
-      :completed_at
+      :completed_at,
+      :version
     ])
     |> validate_required([:id, :flow_module, :status])
     |> validate_inclusion(:status, [:pending, :running, :waiting_agent, :paused, :completed, :failed])
     |> unique_constraint(:id, name: :flow_executions_pkey)
+    |> optimistic_lock(:version)
   end
 
   @doc """

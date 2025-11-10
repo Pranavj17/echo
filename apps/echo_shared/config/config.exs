@@ -3,8 +3,9 @@ import Config
 # Configure Ecto repository
 # NOTE: Database connection details are in runtime.exs for production flexibility
 # Only static, compile-time configuration here
+# Pool configuration is set per-environment (dev.exs, test.exs, prod.exs)
 config :echo_shared, EchoShared.Repo,
-  pool_size: 1  # Each agent uses only 1 connection
+  pool_size: 1  # Each agent uses only 1 connection (overridden in test.exs)
 
 # Configure Ecto
 config :echo_shared, ecto_repos: [EchoShared.Repo]

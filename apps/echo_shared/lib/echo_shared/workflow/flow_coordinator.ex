@@ -46,14 +46,16 @@ defmodule EchoShared.Workflow.FlowCoordinator do
   use GenServer
   require Logger
 
-  alias EchoShared.MessageBus
   alias EchoShared.Workflow.FlowEngine
   alias EchoShared.Schemas.FlowExecution
   alias EchoShared.Repo
 
-  import Ecto.Query
-
   @default_timeout 60_000  # 60 seconds
+  @max_timeout 600_000     # 10 minutes max - prevents resource exhaustion
+
+  # SECURITY: Whitelist of valid agent roles - prevents atom exhaustion attack
+  @valid_agents [:ceo, :cto, :chro, :operations_head, :product_manager,
+                 :senior_architect, :uiux_engineer, :senior_developer, :test_lead, :workflow]
 
   ## Client API
 
@@ -63,9 +65,21 @@ defmodule EchoShared.Workflow.FlowCoordinator do
 
   @doc """
   Register that a flow is waiting for an agent response.
+
+  ## Security
+  - Agent must be in whitelist to prevent atom exhaustion
+  - Timeout is capped at @max_timeout to prevent resource exhaustion
   """
   def await_response(execution_id, agent, request_id, timeout \\ @default_timeout) do
-    GenServer.call(__MODULE__, {:await_response, execution_id, agent, request_id, timeout})
+    # SECURITY: Validate agent is in whitelist
+    unless agent in @valid_agents do
+      Logger.error("Invalid agent role: #{inspect(agent)}")
+      {:error, :invalid_agent}
+    else
+      # SECURITY: Cap timeout to prevent resource exhaustion
+      safe_timeout = min(timeout, @max_timeout)
+      GenServer.call(__MODULE__, {:await_response, execution_id, agent, request_id, safe_timeout})
+    end
   end
 
   ## Server Callbacks
@@ -182,40 +196,74 @@ defmodule EchoShared.Workflow.FlowCoordinator do
 
   ## Private Functions
 
-  defp handle_agent_response(message, state) do
-    # Extract agent and request_id from message
-    agent = String.to_atom(message["from"] || "unknown")
-    request_id = message["request_id"] || message["in_reply_to"]
-
-    if is_nil(request_id) do
-      Logger.warning("Agent response missing request_id, cannot match to flow")
-      {:noreply, state}
-    else
-      waiting_key = {agent, request_id}
-
-      case Map.get(state.waiting, waiting_key) do
-        nil ->
-          Logger.debug("No flow waiting for response from #{agent} (request: #{request_id})")
-          {:noreply, state}
-
-        execution_id ->
-          Logger.info("Resuming flow #{execution_id} with #{agent} response")
-
-          # Cancel timeout
-          case Map.get(state.timeouts, waiting_key) do
-            nil -> :ok
-            timeout_ref -> Process.cancel_timer(timeout_ref)
-          end
-
-          # Resume flow with agent response
-          FlowEngine.resume_flow(execution_id, message)
-
-          # Remove from waiting
-          new_waiting = Map.delete(state.waiting, waiting_key)
-          new_timeouts = Map.delete(state.timeouts, waiting_key)
-
-          {:noreply, %{state | waiting: new_waiting, timeouts: new_timeouts}}
-      end
+  # SECURITY: Parse agent role from string without creating arbitrary atoms
+  # Prevents atom exhaustion attack from malicious Redis messages
+  defp parse_agent_role(agent_string) when is_binary(agent_string) do
+    case agent_string do
+      "ceo" -> {:ok, :ceo}
+      "cto" -> {:ok, :cto}
+      "chro" -> {:ok, :chro}
+      "operations_head" -> {:ok, :operations_head}
+      "product_manager" -> {:ok, :product_manager}
+      "senior_architect" -> {:ok, :senior_architect}
+      "uiux_engineer" -> {:ok, :uiux_engineer}
+      "senior_developer" -> {:ok, :senior_developer}
+      "test_lead" -> {:ok, :test_lead}
+      "workflow" -> {:ok, :workflow}
+      _ ->
+        Logger.warning("Invalid agent role from message: #{agent_string}")
+        {:error, :invalid_agent}
     end
   end
+
+  defp parse_agent_role(nil), do: {:error, :missing_agent}
+  defp parse_agent_role(_), do: {:error, :invalid_agent_type}
+
+  defp handle_agent_response(message, state) do
+    # SECURITY: Extract agent safely without creating arbitrary atoms
+    case parse_agent_role(message["from"]) do
+      {:ok, agent} ->
+        request_id = message["request_id"] || message["in_reply_to"]
+
+        if is_nil(request_id) do
+          Logger.warning("Agent response missing request_id, cannot match to flow")
+          {:noreply, state}
+        else
+          handle_valid_agent_response(agent, request_id, message, state)
+        end
+
+      {:error, reason} ->
+        Logger.warning("Rejecting message from invalid agent: #{inspect(reason)}")
+        {:noreply, state}
+    end
+  end
+
+  defp handle_valid_agent_response(agent, request_id, message, state) do
+    waiting_key = {agent, request_id}
+
+    case Map.get(state.waiting, waiting_key) do
+      nil ->
+        Logger.debug("No flow waiting for response from #{agent} (request: #{request_id})")
+        {:noreply, state}
+
+      execution_id ->
+        Logger.info("Resuming flow #{execution_id} with #{agent} response")
+
+        # Cancel timeout
+        case Map.get(state.timeouts, waiting_key) do
+          nil -> :ok
+          timeout_ref -> Process.cancel_timer(timeout_ref)
+        end
+
+        # Resume flow with agent response
+        FlowEngine.resume_flow(execution_id, message)
+
+        # Remove from waiting
+        new_waiting = Map.delete(state.waiting, waiting_key)
+        new_timeouts = Map.delete(state.timeouts, waiting_key)
+
+        {:noreply, %{state | waiting: new_waiting, timeouts: new_timeouts}}
+    end
+  end
+
 end

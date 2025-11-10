@@ -38,14 +38,13 @@ defmodule EchoShared.Workflow.Examples.FeatureApprovalFlow do
 
   alias EchoShared.MessageBus
 
-  @impl true
   def participants do
     [:product_manager, :senior_architect, :ceo, :cto]
   end
 
   ## Step 1: Analyze the feature request
 
-  @start
+  @start true
   def analyze_feature_request(state) do
     Logger.info("Analyzing feature request: #{state[:feature_name]}")
 
