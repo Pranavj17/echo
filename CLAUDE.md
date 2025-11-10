@@ -96,25 +96,356 @@ echo/
 - Messages must also persist to PostgreSQL
 - Never bypass the message bus for direct communication
 
-### Rule 8: Local LLM Integration (Dual Perspective Workflow)
-- **ALWAYS** query local Ollama LLM (deepseek-coder:6.7b) before responding to user requests
-- Present both perspectives separately in this format:
-  ```
-  🤖 Local LLM (deepseek-coder:6.7b):
-  [LLM's response]
+### Rule 8: Dual-AI Workflow (Claude Code + LocalCode)
 
-  💭 My Analysis:
-  [Claude's response]
-  ```
-- Query endpoint: `http://localhost:11434/api/generate`
-- Send context including:
-  - User's question/task
-  - Relevant code snippets
-  - ECHO project context
-  - Current understanding
-- Use `"stream": false` for synchronous responses
-- Timeout: 30 seconds for LLM queries
-- This provides dual AI perspectives: local specialized coding model + Claude's analysis
+**ECHO now has TWO AI assistant systems working together:**
+
+#### 8.1 LocalCode - Local LLM System
+
+**What is LocalCode?**
+- Replicates Claude Code's startup flow for local LLMs (deepseek-coder:6.7b)
+- $0 cost, 100% private, project-aware AI assistant
+- Loads CLAUDE.md automatically, maintains conversation memory, simulates tools
+- Response time: 7-30 seconds typical
+- Session capacity: 10-12 conversational turns before restart needed
+
+**Quick Commands:**
+```bash
+# Load helper functions (once per terminal session)
+source ./scripts/llm/localcode_quick.sh
+
+# Start session - auto-loads this CLAUDE.md, git context, system status
+lc_start [path]
+
+# Query local LLM - uses deepseek-coder:6.7b
+lc_query "your question"
+
+# Interactive mode - continuous conversation
+lc_interactive
+
+# End session - archives conversation
+lc_end
+
+# Session management
+lc_list    # List active sessions
+lc_show    # Show current session details
+```
+
+**Context Injection (Automatic):**
+LocalCode automatically provides to deepseek-coder:6.7b:
+- ✅ This CLAUDE.md file (first 200 lines) - ~1,500 tokens
+- ✅ System status from `.claude/hooks/session-start.sh`
+- ✅ Git context (branch, last commit, changed files)
+- ✅ Directory structure (top-level)
+- ✅ Conversation history (last 5 turns) - ~500-2000 tokens
+- ✅ Tool execution results (last 3) - if applicable
+- **Total startup context:** ~1,900 tokens
+- **Warning at:** >3,000 tokens (moderate), >4,000 (high), >6,000 (blocked)
+
+**Tool Simulation:**
+Local LLM can request tools (auto-detected and executed):
+```
+TOOL_REQUEST: read_file(apps/ceo/lib/ceo.ex)
+TOOL_REQUEST: grep_code(MessageBus.publish)
+TOOL_REQUEST: glob_files(*.ex)
+TOOL_REQUEST: run_bash(git log --oneline -5)
+```
+
+#### 8.2 When to Use Which AI
+
+**Use Claude Code (Me) for:**
+- ✅ Complex architectural decisions (multi-file changes)
+- ✅ Long-running tasks (refactoring, test writing)
+- ✅ Code generation (new features, scaffolding)
+- ✅ Multi-step workflows (plan → implement → test)
+- ✅ File editing and git operations
+- ✅ Tasks requiring >10 steps or >30 minutes
+
+**Use LocalCode (lc_query) for:**
+- ✅ Quick questions ("How does X work?")
+- ✅ Code exploration ("What's in this file?")
+- ✅ Documentation lookup ("What does this function do?")
+- ✅ Debugging hints ("Why might this fail?")
+- ✅ Architecture clarifications ("How do agents communicate?")
+- ✅ Tasks requiring <5 steps or <5 minutes
+
+**Use BOTH (Dual Perspective) for:**
+- 🤝 Code reviews (get two opinions)
+- 🤝 Architectural analysis (different perspectives)
+- 🤝 Design decisions (compare approaches)
+- 🤝 Complex debugging (more insights)
+- 🤝 Security/performance audits (thorough analysis)
+
+#### 8.3 Dual Perspective Response Format
+
+When appropriate, present both AI perspectives:
+
+```
+🤖 Local LLM (deepseek-coder:6.7b):
+[Fast, specialized coding perspective from local model]
+
+💭 Claude Code Analysis:
+[Comprehensive analysis from frontier model]
+```
+
+**How to get dual perspective:**
+```bash
+# 1. Query local LLM first
+lc_query "Analyze the MessageBus implementation for issues"
+
+# 2. Then ask Claude Code the same question
+# Claude will provide complementary analysis
+```
+
+#### 8.4 LocalCode Session Management Rules
+
+**Best Practices:**
+- 📏 **Context awareness** - Watch for warnings: ⚠️ "Context moderate/large"
+- 🔄 **Session rotation** - Start fresh every 5-8 turns or when warned
+- 💾 **Clean exits** - Always `lc_end` to archive conversation
+- 🎯 **Focused queries** - Keep questions specific (reduces context growth)
+- 🔧 **Tool usage** - Let LLM request tools (don't paste huge code blocks)
+
+**Context Growth Pattern:**
+```
+Turn 0 (startup):  1,936 tokens
+Turn 1:            2,061 tokens (+125)
+Turn 3:            2,530 tokens (+469)
+Turn 5:            3,376 tokens (+846) ⚠️ Moderate warning
+Turn 8-10:         4,000 tokens        ⚠️ High warning
+Turn 12-15:        6,000 tokens        🚨 Session restart required
+```
+
+**When to restart session:**
+- ⚠️ You see "Context moderate" warning
+- 🔄 Changed project branches/directories
+- 🎯 Switching to different topic/task
+- 💾 After 5-8 conversational turns
+
+#### 8.5 LocalCode vs Claude Code Comparison
+
+| Feature | LocalCode | Claude Code (Me) |
+|---------|-----------|------------------|
+| **Cost** | $0 (local) | $0.015/query (API) |
+| **Privacy** | 100% local | Cloud-based |
+| **Speed** | 7-30s | 2-5s |
+| **Context** | 8K window (~6K safe) | 200K window |
+| **Memory** | Session-based | Native |
+| **Tools** | Simulated | Native |
+| **Quality** | Good (6.7B) | Excellent (Sonnet 4.5) |
+| **Project Aware** | ✅ Yes | ✅ Yes |
+| **Best For** | Quick queries | Complex tasks |
+
+#### 8.6 Integration with ECHO Agents
+
+**Future enhancement:** ECHO agents can use LocalCode internally:
+```elixir
+# Instead of:
+DecisionHelper.consult(:ceo, question, context)
+
+# Could use:
+LocalCode.query(session_id, question, context)
+# Returns: Project-aware, conversational AI response
+```
+
+**Benefits for agents:**
+- Each agent gets project-aware reasoning
+- $0 cost per consultation
+- 100% private (no external API calls)
+- Conversation memory across agent interactions
+
+#### 8.7 Configuration & Environment
+
+**Environment variables:**
+```bash
+export LLM_MODEL="deepseek-coder:6.7b"  # Model to use
+export LLM_TIMEOUT=180                  # Query timeout (3 minutes)
+export OLLAMA_ENDPOINT="http://localhost:11434"
+```
+
+**Alternative models:**
+```bash
+export LLM_MODEL="llama3.1:8b"          # Faster, general purpose
+export LLM_MODEL="deepseek-coder:33b"   # Slower, more powerful
+export LLM_MODEL="qwen2.5:14b"          # Best reasoning
+export LLM_MODEL="codellama:13b"        # Code-focused
+```
+
+#### 8.8 Documentation & Help
+
+**Full documentation:**
+- `scripts/llm/QUICK_START.md` - Simple tutorial
+- `scripts/llm/LOCALCODE_GUIDE.md` - Complete reference
+- `scripts/llm/README.md` - Context injection architecture
+- `scripts/llm/EFFICIENCY_TEST_RESULTS.md` - Performance analysis
+
+**Quick help:**
+```bash
+source ./scripts/llm/localcode_quick.sh
+# Displays available commands automatically
+```
+
+#### 8.9 Common Pitfalls & Solutions
+
+**Issue:** "Failed to get response from Ollama"
+```bash
+# Check Ollama is running
+curl http://localhost:11434/api/tags
+
+# Check model exists
+ollama list | grep deepseek-coder
+
+# Pull model if missing
+ollama pull deepseek-coder:6.7b
+```
+
+**Issue:** "Context too large" warning
+```bash
+# Solution 1: End and restart session
+lc_end && lc_start
+
+# Solution 2: Use shorter questions
+# Instead of: "Explain everything about X, Y, Z..."
+# Do: "What is X?" then "How does Y work?" then "Explain Z"
+
+# Solution 3: Clear tool results (if many tools used)
+# Restart session to clear accumulated tool outputs
+```
+
+**Issue:** Slow responses (>60 seconds)
+```bash
+# Solution 1: Increase timeout
+export LLM_TIMEOUT=300  # 5 minutes
+
+# Solution 2: Use smaller/faster model
+export LLM_MODEL="deepseek-coder:1.3b"
+
+# Solution 3: Reduce context
+# Keep questions shorter, restart session more frequently
+```
+
+**Issue:** Inaccurate responses
+```bash
+# LocalCode is good but not perfect. For critical tasks:
+# 1. Use dual perspective (check with Claude Code)
+# 2. Verify answers against code/docs
+# 3. Use larger model (deepseek-coder:33b or qwen2.5:14b)
+```
+
+#### 8.10 Workflow Integration Examples
+
+**Example 1: Code Review Workflow**
+```bash
+# 1. Start session
+lc_start
+
+# 2. Quick understanding
+lc_query "What does apps/ceo/lib/ceo.ex do?"
+
+# 3. Detailed review
+lc_query "Review the approve_strategic_initiative function for bugs"
+
+# 4. Get second opinion from Claude Code
+# Ask me: "Review approve_strategic_initiative in apps/ceo/lib/ceo.ex"
+
+# 5. Compare insights
+# Local LLM: Fast, code-focused feedback
+# Claude Code: Deeper architectural concerns
+```
+
+**Example 2: Debugging Workflow**
+```bash
+lc_start
+
+# Quick diagnosis
+lc_query "I'm getting 'connection refused' to Redis. What could cause this?"
+
+# If tool request appears
+# LocalCode auto-executes: run_bash(docker ps | grep redis)
+
+# Get detailed fix
+lc_query "How do I fix Redis connection in ECHO?"
+
+# For implementation, switch to Claude Code
+# I'll help write the actual fix with proper error handling
+```
+
+**Example 3: Learning Workflow**
+```bash
+lc_interactive
+
+> What are the 9 agents in ECHO?
+[Gets overview]
+
+> How does the CEO agent make decisions?
+[Learns about DecisionEngine]
+
+> Show me an example of autonomous vs collaborative mode
+[Gets code examples]
+
+> What happens if CEO budget limit is exceeded?
+[Understands escalation flow]
+
+> exit
+
+# Now have full context, ready to implement features
+```
+
+**Example 4: Architecture Exploration**
+```bash
+lc_start
+
+# High-level
+lc_query "Explain ECHO's message bus architecture"
+
+# Dive deeper
+lc_query "What's the dual-write pattern in MessageBus?"
+
+# Potential issues
+lc_query "What race conditions exist in the message bus?"
+
+# Get comprehensive analysis from Claude Code
+# Ask me: "Do deep architectural review of MessageBus with race condition analysis"
+# I'll provide extensive analysis + code fixes
+```
+
+#### 8.11 Testing & Validation
+
+**Verified performance (see EFFICIENCY_TEST_RESULTS.md):**
+- ✅ Response times: 7-30 seconds (acceptable)
+- ✅ Context capacity: 10-12 conversational turns
+- ✅ Quality: Accurate, project-aware responses (4/5 stars)
+- ✅ Warning system: Triggers correctly at >3K tokens
+- ✅ Overall grade: A- (4.25/5 stars)
+
+**Tested scenarios:**
+1. Simple queries (1 sentence) - 7s response, excellent quality
+2. Medium queries (architecture) - 10-15s, good quality
+3. Complex queries (multi-part) - 20-30s, good quality
+4. Context warnings - Correctly triggered at 3,376 tokens
+
+#### 8.12 Summary: Dual-AI Development Workflow
+
+**The Power of Two AI Systems:**
+
+```
+┌─────────────────────────────────────────────────┐
+│                                                 │
+│  Quick Question? → lc_query "..."              │
+│  Complex Task?   → Ask Claude Code             │
+│  Need Both?      → Dual Perspective Review     │
+│                                                 │
+│  Result: Faster development, better quality    │
+│          $0 cost for quick queries             │
+│          100% private for sensitive code       │
+│                                                 │
+└─────────────────────────────────────────────────┘
+```
+
+**Golden Rule:**
+Start with LocalCode for exploration → Switch to Claude Code for implementation → Use both for validation
+
+**This is a force multiplier for ECHO development!** 🚀
 
 ## 🚀 Quick Start Commands
 

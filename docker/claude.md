@@ -583,6 +583,18 @@ docker logs redis
 - Clean up build artifacts
 - Don't copy unnecessary files
 
+## LocalCode for Docker Questions
+
+For quick Docker deployment queries, use **LocalCode** (see `../CLAUDE.md` Rule 8):
+
+```bash
+source ./scripts/llm/localcode_quick.sh
+lc_start
+lc_query "How do I build Docker images for ECHO agents?"
+lc_query "Explain the docker-compose setup"
+lc_end
+```
+
 ## Related Documentation
 
 - **Parent:** [../CLAUDE.md](../CLAUDE.md) - Project overview

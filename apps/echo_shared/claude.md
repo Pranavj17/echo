@@ -695,6 +695,43 @@ mix deps.get
 mix compile
 ```
 
+## Using LocalCode for Shared Library Development
+
+**LocalCode** (scripts/llm/) provides quick assistance when working with the shared library. See `../CLAUDE.md` Rule 8 for complete documentation.
+
+### Quick Queries
+
+```bash
+source ./scripts/llm/localcode_quick.sh
+lc_start
+
+# Understanding modules
+lc_query "How does EchoShared.MessageBus work?"
+lc_query "Explain the MCP.Server behavior"
+lc_query "What schemas are available?"
+
+# Implementation help
+lc_query "How do I create a new database migration?"
+lc_query "Show me the pattern for Redis pub/sub"
+lc_query "How to use the LLM.DecisionHelper module?"
+
+lc_end
+```
+
+**Use LocalCode for:**
+- Quick API reference lookups
+- Understanding module interactions
+- Debugging hints for compilation errors
+- Schema and migration patterns
+
+**Use Claude Code for:**
+- Implementing new shared functionality
+- Refactoring modules
+- Writing tests
+- Database migrations
+
+Response time: 7-30 seconds typical
+
 ## Related Documentation
 
 - **Parent:** [../CLAUDE.md](../CLAUDE.md) - Project overview

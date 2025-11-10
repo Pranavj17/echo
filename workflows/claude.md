@@ -495,6 +495,75 @@ WORKFLOW_PARALLEL_LIMIT=5      # Max concurrent parallel steps
 WORKFLOW_EXECUTION_RETENTION=30  # Days to keep execution history
 ```
 
+## Using LocalCode for Workflow Development
+
+**LocalCode** (scripts/llm/) provides quick assistance for workflow development and debugging. See `../CLAUDE.md` Rule 8 and `../scripts/claude.md` for complete documentation.
+
+### Quick Start
+
+```bash
+source ./scripts/llm/localcode_quick.sh
+lc_start
+
+# Explore workflow patterns
+lc_query "Show me the feature development workflow structure"
+lc_query "How do I implement a conditional step?"
+lc_query "Explain workflow context passing between steps"
+
+lc_end
+```
+
+### Common Workflow Queries
+
+**Understanding Workflows:**
+```bash
+lc_query "What workflow step types are available?"
+lc_query "How do parallel steps work?"
+lc_query "Explain workflow pause and resume"
+```
+
+**Building Workflows:**
+```bash
+lc_query "How do I create a new workflow for incident response?"
+lc_query "What's the pattern for human-in-the-loop workflows?"
+lc_query "Show me error handling in workflows"
+```
+
+**Debugging:**
+```bash
+lc_query "Workflow stuck in running state, how to debug?"
+lc_query "Why might context not pass between steps?"
+lc_query "How to debug parallel step synchronization issues?"
+```
+
+**Review:**
+```bash
+# Dual perspective
+lc_query "Review workflows/examples/feature_development.exs for issues"
+# Then ask Claude Code for comprehensive analysis
+```
+
+### When to Use LocalCode vs Claude Code
+
+**Use LocalCode for:**
+- Understanding workflow DSL syntax
+- Quick pattern lookup
+- Debugging hints for stuck workflows
+- Exploring example workflows
+
+**Use Claude Code for:**
+- Creating new complex workflows
+- Refactoring workflow definitions
+- Writing workflow tests
+- Multi-file workflow changes
+
+**Use Both for:**
+- Reviewing workflow definitions
+- Design decisions for workflow patterns
+- Complex debugging scenarios
+
+Response time: 7-30 seconds typical
+
 ## Related Documentation
 
 - **Parent:** [../CLAUDE.md](../CLAUDE.md) - Project overview

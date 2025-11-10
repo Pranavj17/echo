@@ -549,6 +549,130 @@ export AGENT_AUTONOMOUS=true
 export AGENT_LOG_LEVEL=debug
 ```
 
+## Using LocalCode for Agent Development
+
+**LocalCode** (scripts/llm/) provides a local LLM assistant (deepseek-coder:6.7b) for quick agent development queries. See `../CLAUDE.md` Rule 8 and `../scripts/claude.md` for complete documentation.
+
+### Quick Start
+
+```bash
+# Load helper functions
+source ./scripts/llm/localcode_quick.sh
+
+# Start session
+lc_start
+
+# Query about agent implementation
+lc_query "How does the CEO agent handle budget approvals?"
+lc_query "Explain the MessageHandler pattern used in agents"
+lc_query "What tools does the CTO agent provide?"
+
+# Interactive exploration
+lc_interactive
+> Show me the decision engine implementation pattern
+> How do agents escalate decisions?
+> What's the authority check pattern?
+> exit
+
+# End session
+lc_end
+```
+
+### Common Agent Development Queries
+
+**Understanding Existing Agents:**
+```bash
+lc_query "What's in the CEO agent's main module?"
+lc_query "How does the CTO agent use its LLM?"
+lc_query "Show me the decision modes used by agents"
+```
+
+**Implementation Patterns:**
+```bash
+lc_query "How do I implement a new MCP tool?"
+lc_query "What's the pattern for multi-agent coordination?"
+lc_query "Show me error handling best practices for agents"
+```
+
+**Debugging:**
+```bash
+lc_query "Why would an agent not receive messages?"
+lc_query "How do I debug LLM consultation failures?"
+lc_query "What could cause DBConnection errors in agents?"
+```
+
+**Code Reviews:**
+```bash
+# Get dual perspective (LocalCode + Claude Code)
+lc_query "Review apps/echo_ceo/lib/ceo/decision_engine.ex for issues"
+# Then ask Claude Code the same question for comprehensive analysis
+```
+
+### When to Use LocalCode vs Claude Code
+
+**Use LocalCode for:**
+- Quick exploration of agent code
+- Understanding implementation patterns
+- Debugging hints and direction
+- Documentation lookup
+- Simple clarifications
+
+**Use Claude Code for:**
+- Implementing new agents
+- Refactoring agent code
+- Writing tests
+- Complex debugging and fixes
+- Multi-file changes
+
+**Use Both (Dual Perspective) for:**
+- Code reviews of agent implementations
+- Design decisions for new features
+- Security audits of agent tools
+- Architecture analysis
+
+### LocalCode Context Awareness
+
+LocalCode automatically has context about:
+- ✅ All ECHO agent patterns (from CLAUDE.md)
+- ✅ Current git branch and recent commits
+- ✅ Directory structure
+- ✅ Common pitfalls and solutions
+- ✅ Decision modes and patterns
+
+Response time: 7-30 seconds typical
+
+### Example Workflow: Building a New Agent
+
+```bash
+# 1. Understand existing patterns
+lc_start
+lc_query "Show me the CEO agent structure"
+lc_query "What modules are required for an agent?"
+
+# 2. Get implementation guidance
+lc_query "How do I implement the DecisionEngine module?"
+
+# 3. Review generated code (use Claude Code to generate, LocalCode to review)
+# Claude Code: Generate the agent implementation
+lc_query "Review apps/echo_new_agent/lib/new_agent.ex for MCP compliance"
+
+# 4. Debug issues
+lc_query "Agent not receiving messages, what could be wrong?"
+
+lc_end
+```
+
+### Performance Note
+
+LocalCode sessions have ~10-12 turn capacity before context fills up. For long development sessions:
+
+```bash
+# After 8-10 queries, start fresh
+lc_end
+lc_start
+# Context resets, conversation starts fresh
+```
+
 ## Related Documentation
 
 - **Parent:** [../CLAUDE.md](../CLAUDE.md) - Project overview
