@@ -7,6 +7,7 @@ defmodule EchoShared.LLM.Session do
   - Multi-turn conversation history (last 5 turns kept)
   - Context size tracking and warnings
   - Automatic session cleanup
+  - **PostgreSQL persistence** - Sessions survive process restarts
 
   ## Usage
 
@@ -14,7 +15,7 @@ defmodule EchoShared.LLM.Session do
       {:ok, %{response: response, session_id: sid}} =
         Session.query(nil, "What should I do?", agent_role: :ceo)
 
-      # Continue conversation
+      # Continue conversation (works across separate Mix runs)
       {:ok, %{response: response2}} =
         Session.query(sid, "Tell me more about that")
 
@@ -23,7 +24,8 @@ defmodule EchoShared.LLM.Session do
 
   ## Session Lifecycle
 
-  Sessions are stored in ETS and automatically:
+  Sessions are stored in PostgreSQL and automatically:
+  - Persist across process restarts
   - Cleaned up after 1 hour of inactivity
   - Warn when >10 turns (approaching context limit)
   - Warn when >4000 tokens (context getting large)
@@ -33,8 +35,10 @@ defmodule EchoShared.LLM.Session do
   require Logger
 
   alias EchoShared.LLM.{Client, Config, ContextBuilder}
+  alias EchoShared.Repo
+  alias EchoShared.Schemas.LlmSession
+  import Ecto.Query
 
-  @table_name :llm_sessions
   @max_conversation_turns 5
   @session_timeout_ms :timer.hours(1)
   @cleanup_interval_ms :timer.minutes(15)
@@ -108,9 +112,9 @@ defmodule EchoShared.LLM.Session do
   Returns `nil` if session doesn't exist.
   """
   def get_session(session_id) do
-    case :ets.lookup(@table_name, session_id) do
-      [{^session_id, session}] -> session
-      [] -> nil
+    case Repo.get(LlmSession, session_id) do
+      nil -> nil
+      db_session -> LlmSession.to_session_struct(db_session)
     end
   end
 
@@ -120,16 +124,16 @@ defmodule EchoShared.LLM.Session do
   Returns `{:ok, conversation_history}` or `{:error, :not_found}`.
   """
   def end_session(session_id) do
-    case get_session(session_id) do
+    case Repo.get(LlmSession, session_id) do
       nil ->
         {:error, :not_found}
 
-      session ->
-        # Archive conversation
+      db_session ->
+        session = LlmSession.to_session_struct(db_session)
         conversation = session.conversation_history
 
-        # Remove from ETS
-        :ets.delete(@table_name, session_id)
+        # Delete from database
+        Repo.delete(db_session)
 
         Logger.info("Session #{session_id} ended: #{session.turn_count} turns, ~#{session.total_tokens} tokens")
 
@@ -141,15 +145,15 @@ defmodule EchoShared.LLM.Session do
   List all active sessions.
   """
   def list_sessions do
-    :ets.tab2list(@table_name)
-    |> Enum.map(fn {session_id, session} ->
+    Repo.all(LlmSession)
+    |> Enum.map(fn db_session ->
       %{
-        session_id: session_id,
-        agent_role: session.agent_role,
-        turn_count: session.turn_count,
-        total_tokens: session.total_tokens,
-        created_at: session.created_at,
-        last_query_at: session.last_query_at
+        session_id: db_session.session_id,
+        agent_role: String.to_atom(db_session.agent_role),
+        turn_count: db_session.turn_count,
+        total_tokens: db_session.total_tokens,
+        created_at: db_session.created_at,
+        last_query_at: db_session.last_query_at
       }
     end)
   end
@@ -201,6 +205,8 @@ defmodule EchoShared.LLM.Session do
     context = ContextBuilder.build_startup_context(agent_role)
     context_tokens = ContextBuilder.estimate_tokens(context)
 
+    now = DateTime.utc_now()
+
     session = %{
       session_id: session_id,
       agent_role: agent_role,
@@ -208,15 +214,24 @@ defmodule EchoShared.LLM.Session do
       conversation_history: [],
       turn_count: 0,
       total_tokens: context_tokens,
-      created_at: DateTime.utc_now(),
-      last_query_at: DateTime.utc_now()
+      created_at: now,
+      last_query_at: now
     }
 
-    :ets.insert(@table_name, {session_id, session})
+    # Convert to database format and insert
+    attrs = LlmSession.from_session_struct(session)
 
-    Logger.info("Created session #{session_id} for #{agent_role}: ~#{context_tokens} context tokens")
+    case %LlmSession{}
+         |> LlmSession.changeset(attrs)
+         |> Repo.insert() do
+      {:ok, _db_session} ->
+        Logger.info("Created session #{session_id} for #{agent_role}: ~#{context_tokens} context tokens")
+        session
 
-    session
+      {:error, changeset} ->
+        Logger.error("Failed to create session: #{inspect(changeset.errors)}")
+        raise "Session creation failed"
+    end
   end
 
   defp build_messages(session, question, opts) do
@@ -276,9 +291,20 @@ defmodule EchoShared.LLM.Session do
       last_query_at: DateTime.utc_now()
     }
 
-    :ets.insert(@table_name, {session.session_id, updated_session})
+    # Update in database
+    db_session = Repo.get!(LlmSession, session.session_id)
+    attrs = LlmSession.from_session_struct(updated_session)
 
-    updated_session
+    case db_session
+         |> LlmSession.changeset(attrs)
+         |> Repo.update() do
+      {:ok, _} ->
+        updated_session
+
+      {:error, changeset} ->
+        Logger.error("Failed to update session: #{inspect(changeset.errors)}")
+        raise "Session update failed"
+    end
   end
 
   defp estimate_total_tokens(messages) do
@@ -324,13 +350,10 @@ defmodule EchoShared.LLM.Session do
 
   @impl true
   def init(_opts) do
-    # Create ETS table for sessions
-    :ets.new(@table_name, [:named_table, :set, :public, read_concurrency: true])
-
     # Schedule periodic cleanup
     schedule_cleanup()
 
-    Logger.info("LLM Session manager started")
+    Logger.info("LLM Session manager started (PostgreSQL persistence)")
 
     {:ok, %{}}
   end
@@ -350,13 +373,13 @@ defmodule EchoShared.LLM.Session do
     now = DateTime.utc_now()
     cutoff = DateTime.add(now, -@session_timeout_ms, :millisecond)
 
-    :ets.tab2list(@table_name)
-    |> Enum.filter(fn {_id, session} ->
-      DateTime.compare(session.last_query_at, cutoff) == :lt
-    end)
-    |> Enum.each(fn {session_id, session} ->
-      Logger.info("Cleaning up inactive session #{session_id} (last activity: #{session.last_query_at})")
-      :ets.delete(@table_name, session_id)
-    end)
+    # Delete old sessions in a single query
+    {count, _} =
+      from(s in LlmSession, where: s.last_query_at < ^cutoff)
+      |> Repo.delete_all()
+
+    if count > 0 do
+      Logger.info("Cleaned up #{count} inactive sessions (last activity before #{cutoff})")
+    end
   end
 end

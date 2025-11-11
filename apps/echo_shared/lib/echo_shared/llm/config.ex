@@ -50,7 +50,7 @@ defmodule EchoShared.LLM.Config do
     # Design - Visual understanding and UX (FASTER: 11b vision → 8b)
     uiux_engineer: "llama3.1:8b",
 
-    # Development - Code generation and implementation
+    # Development - Code generation and implementationqwen2.5:14b
     senior_developer: "deepseek-coder:6.7b",
 
     # Quality Assurance - Test generation (FASTER: 13b → 6.7b)
