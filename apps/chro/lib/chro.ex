@@ -256,6 +256,41 @@ defmodule Chro do
           },
           required: ["query_type", "question"]
         }
+      },
+      %{
+        name: "session_consult",
+        description: """
+        Query the AI assistant with conversation memory (LocalCode-style).
+
+        Maintains multi-turn conversations with automatic context injection:
+        - Your role, responsibilities, and authority limits
+        - Recent decisions and messages (last 5 each)
+        - Current system status (PostgreSQL, Redis, Ollama)
+        - Git context (branch, last commit)
+        - Conversation history (last 5 turns)
+
+        Perfect for exploratory questions, decision analysis with iterative thinking,
+        and strategy planning with follow-up questions.
+        """,
+        inputSchema: %{
+          type: "object",
+          properties: %{
+            question: %{
+              type: "string",
+              description: "The question to ask the AI assistant",
+              minLength: 1
+            },
+            session_id: %{
+              type: "string",
+              description: "Session ID to continue conversation (optional, omit for new session)"
+            },
+            context: %{
+              type: "string",
+              description: "Additional context for this specific query (optional)"
+            }
+          },
+          required: ["question"]
+        }
       }
     ]
   end
@@ -474,6 +509,29 @@ defmodule Chro do
         {:error, reason} ->
           {:error, "AI consultation failed: #{inspect(reason)}"}
       end
+    end
+  end
+
+  def execute_tool("session_consult", args) do
+    question = Map.fetch!(args, "question")
+    session_id = Map.get(args, "session_id")
+    context = Map.get(args, "context")
+
+    opts = if context, do: [context: context], else: []
+
+    case DecisionHelper.consult_session(:chro, session_id, question, opts) do
+      {:ok, result} ->
+        response = format_session_response(result)
+        {:ok, response}
+
+      {:error, :llm_disabled} ->
+        {:error, "LLM is disabled for CHRO. Enable with LLM_ENABLED=true or CHRO_LLM_ENABLED=true"}
+
+      {:error, :session_not_found} ->
+        {:error, "Session not found: #{session_id}. It may have expired after 1 hour of inactivity."}
+
+      {:error, reason} ->
+        {:error, "AI consultation failed: #{inspect(reason)}"}
     end
   end
 
@@ -711,6 +769,25 @@ defmodule Chro do
       nil -> {:error, "Missing required field: #{key}"}
       value when is_binary(value) -> {:ok, value}
       _ -> {:error, "Field #{key} must be a string"}
+    end
+  end
+
+  defp format_session_response(result) do
+    model = EchoShared.LLM.Config.get_model(:chro)
+
+    base = %{
+      "response" => result.response,
+      "session_id" => result.session_id,
+      "turn_count" => result.turn_count,
+      "estimated_tokens" => result.total_tokens,
+      "model" => model,
+      "agent" => "chro"
+    }
+
+    if result.warnings != [] do
+      Map.put(base, "warnings", result.warnings)
+    else
+      base
     end
   end
 end

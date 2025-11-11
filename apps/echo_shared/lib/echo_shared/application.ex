@@ -5,6 +5,7 @@ defmodule EchoShared.Application do
   Starts and supervises:
   - Ecto repository (PostgreSQL connection pool)
   - Redis connection pool
+  - LLM session manager
   """
 
   use Application
@@ -26,7 +27,10 @@ defmodule EchoShared.Application do
       # (see agents/*/lib/*/application.ex) not here to avoid conflicts
 
       # Agent health monitor
-      EchoShared.AgentHealthMonitor
+      EchoShared.AgentHealthMonitor,
+
+      # LLM session manager (for conversation memory)
+      EchoShared.LLM.Session
     ]
 
     # Add Workflow Engine only if enabled (for workflow orchestrator, not agents)

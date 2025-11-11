@@ -447,6 +447,58 @@ Start with LocalCode for exploration → Switch to Claude Code for implementatio
 
 **This is a force multiplier for ECHO development!** 🚀
 
+### Rule 9: Documentation Organization
+
+**All documentation must be organized in appropriate `docs/` folders:**
+
+**Project-Level Documentation** → `./docs/`
+```
+docs/
+├── README.md                    # Documentation index
+├── architecture/                # System architecture documents
+│   ├── ECHO_ARCHITECTURE.md
+│   └── FLOW_DSL_IMPLEMENTATION.md
+├── guides/                      # User guides and tutorials
+│   ├── GETTING_STARTED.md
+│   ├── DEMO_GUIDE.md
+│   └── claude-desktop-setup.md
+├── completed/                   # Completed implementation reports
+│   ├── DAY2_TRAINING_COMPLETE.md
+│   ├── SECURITY_FIXES.md
+│   └── SCRIPT_CLEANUP_SUMMARY.md
+└── troubleshooting/            # Troubleshooting guides
+```
+
+**App-Specific Documentation** → `apps/{app_name}/docs/`
+```
+apps/
+├── echo_shared/
+│   └── docs/                   # Shared library documentation
+│       ├── README.md
+│       ├── SESSION_CONSULT_INTEGRATION_FINAL_REPORT.md
+│       └── LLM_SESSION_INTEGRATION_SUMMARY.md
+├── ceo/
+│   └── docs/                   # CEO agent documentation (if needed)
+├── cto/
+│   └── docs/                   # CTO agent documentation (if needed)
+└── ...
+```
+
+**Rules:**
+- ✅ **DO** create `docs/` folders in apps when adding app-specific documentation
+- ✅ **DO** keep only `CLAUDE.md` and `README.md` at project root
+- ✅ **DO** organize by type: architecture, guides, completed, troubleshooting
+- ❌ **DON'T** leave loose `.md` files at project root (except CLAUDE.md, README.md)
+- ❌ **DON'T** create new documentation files without placing them in appropriate `docs/` folder
+- ❌ **DON'T** duplicate documentation - use symlinks or references if needed
+
+**Examples:**
+- New architecture document → `docs/architecture/`
+- Agent-specific guide → `apps/{agent}/docs/`
+- Completed feature report → `docs/completed/`
+- Troubleshooting guide → `docs/troubleshooting/`
+- General user guide → `docs/guides/`
+
 ## 🚀 Quick Start Commands
 
 ### First Time Setup
@@ -571,16 +623,35 @@ Location: `shared/test/`, `agents/*/test/`, `test/integration/`
 
 ## 📚 Documentation Map
 
-| Document | Purpose |
-|----------|---------|
-| `ECHO_ARCHITECTURE.md` | Complete system architecture and design decisions |
-| `README.md` | User-facing getting started guide |
-| `GETTING_STARTED.md` | Step-by-step setup instructions |
-| `DEMO_GUIDE.md` | 10 demo scenarios with examples |
-| `CLAUDE_DESKTOP_SETUP.md` | Connect agents to Claude Desktop |
-| `PHASE_4_ARCHITECTURE.md` | Current phase implementation details |
-| `agents/claude.md` | Agent development patterns |
-| `shared/claude.md` | Shared library API reference |
+**See Rule 9 for documentation organization guidelines.**
+
+### Project Documentation (`./docs/`)
+
+| Document | Location | Purpose |
+|----------|----------|---------|
+| **Architecture** | | |
+| `ECHO_ARCHITECTURE.md` | `docs/architecture/` | Complete system architecture and design decisions |
+| `FLOW_DSL_IMPLEMENTATION.md` | `docs/architecture/` | Event-driven Flow DSL implementation details |
+| **Guides** | | |
+| `README.md` | `./ (root)` | User-facing getting started guide |
+| `GETTING_STARTED.md` | `docs/guides/` | Step-by-step setup instructions |
+| `DEMO_GUIDE.md` | `docs/guides/` | 10 demo scenarios with examples |
+| `claude-desktop-setup.md` | `docs/guides/` | Connect agents to Claude Desktop |
+| **Completed** | | |
+| `DAY2_TRAINING_COMPLETE.md` | `docs/completed/` | Day 2 training completion report |
+| `SECURITY_FIXES.md` | `docs/completed/` | Security hardening implementation |
+| `SCRIPT_CLEANUP_SUMMARY.md` | `docs/completed/` | Script cleanup and umbrella migration |
+
+### App-Specific Documentation
+
+| Document | Location | Purpose |
+|----------|----------|---------|
+| `apps/CLAUDE.md` | `apps/` | Agent development patterns |
+| `apps/echo_shared/CLAUDE.md` | `apps/echo_shared/` | Shared library API reference |
+| **Session Consult** | | |
+| `SESSION_CONSULT_INTEGRATION_FINAL_REPORT.md` | `apps/echo_shared/docs/` | Complete integration report |
+| `SESSION_CONSULT_INTEGRATION_COMPLETE.md` | `apps/echo_shared/docs/` | Quick reference guide |
+| `LLM_SESSION_INTEGRATION_SUMMARY.md` | `apps/echo_shared/docs/` | Integration summary |
 
 ## 🔧 Environment Variables
 

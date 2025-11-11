@@ -211,6 +211,63 @@ defmodule EchoShared.LLM.DecisionHelper do
   end
 
   @doc """
+  Session-based AI consultation with conversation memory (LocalCode-style).
+
+  Maintains multi-turn conversation with automatic context injection including:
+  - Agent role and responsibilities
+  - Recent decisions and messages
+  - System status
+  - Git context
+  - Conversation history (last 5 turns)
+
+  ## Parameters
+
+  - `role` - Agent role
+  - `session_id` - Existing session ID, or `nil` to start new session
+  - `question` - The question to ask
+  - `opts` - Options:
+    - `:context` - Additional context for this query
+    - `:temperature` - Override temperature
+    - `:max_tokens` - Override max_tokens
+
+  ## Returns
+
+  - `{:ok, %{response: text, session_id: id, turn_count: n, warnings: []}}` on success
+  - `{:error, reason}` - On failure
+
+  ## Example
+
+      # Start new session
+      {:ok, result} = DecisionHelper.consult_session(:ceo, nil, "What should I prioritize?")
+      # => %{response: "...", session_id: "ceo_1234567_12345", turn_count: 1, warnings: []}
+
+      # Continue conversation
+      {:ok, result2} = DecisionHelper.consult_session(:ceo, result.session_id, "Tell me more about that")
+      # => %{response: "...", session_id: "ceo_1234567_12345", turn_count: 2, warnings: []}
+
+      # End session when done
+      EchoShared.LLM.Session.end_session(result.session_id)
+  """
+  def consult_session(role, session_id, question, opts \\ []) do
+    unless Config.llm_enabled?(role) do
+      {:error, :llm_disabled}
+    else
+      alias EchoShared.LLM.Session
+
+      # Add agent_role to opts if creating new session
+      query_opts = if session_id == nil do
+        Keyword.put(opts, :agent_role, role)
+      else
+        opts
+      end
+
+      Logger.info("#{role}: Session-based query (session: #{session_id || "new"})")
+
+      Session.query(session_id, question, query_opts)
+    end
+  end
+
+  @doc """
   Generate code or technical implementation guidance.
 
   Optimized for technical roles (CTO, Senior Developer, etc.)
