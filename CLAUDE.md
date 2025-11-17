@@ -8,44 +8,30 @@ This file provides guidance to Claude Code when working with the ECHO repository
 
 **Vision:** Enable AI agents to operate as autonomous workers that make decisions, collaborate, escalate appropriately, and require human approval for critical actions.
 
-## 🏗️ Architecture at a Glance
+## 🏗️ Architecture
 
 ```
 Claude Desktop / MCP Client
     ├──> 9 Independent Agent MCP Servers (CEO, CTO, CHRO, Ops, PM, Architect, UI/UX, Dev, Test)
     │    └──> Each has specialized LLM via Ollama
-    │
     └──> Shared Infrastructure
          ├── PostgreSQL (decisions, messages, memories, votes, agent status)
          └── Redis (message bus, pub/sub, real-time coordination)
 ```
 
-**9 Agent Roles:**
-- **CEO** - Strategic leadership (qwen2.5:14b)
-- **CTO** - Technology strategy (deepseek-coder:33b)
-- **CHRO** - HR management (llama3.1:8b)
-- **Operations Head** - Infrastructure (mistral:7b)
-- **Product Manager** - Product strategy (llama3.1:8b)
-- **Senior Architect** - System design (deepseek-coder:33b)
-- **UI/UX Engineer** - Interface design (llama3.2-vision:11b)
-- **Senior Developer** - Implementation (deepseek-coder:6.7b)
-- **Test Lead** - QA testing (codellama:13b)
+**Tech Stack:** Elixir 1.18, PostgreSQL 16, Redis 7, MCP 2024-11-05, Ollama (9 specialized local models), Phoenix LiveView
 
-## 📂 Repository Structure & Context Files
+## 📂 Repository Structure
 
 Each major directory has its own `claude.md` with focused context:
-
-```
-echo/
-├── CLAUDE.md                    # This file - project overview & critical rules
-├── agents/claude.md             # Agent development patterns
-├── shared/claude.md             # Shared library usage guide
-├── monitor/claude.md            # Phoenix LiveView dashboard
-├── workflows/claude.md          # Multi-agent workflow patterns
-├── training/claude.md           # Training scripts & testing
-├── scripts/claude.md            # Utility scripts
-└── docker/claude.md             # Deployment & containerization
-```
+- `/CLAUDE.md` - This file (project overview & critical rules)
+- `apps/claude.md` - Agent development patterns
+- `apps/echo_shared/claude.md` - Shared library API
+- `test/claude.md` - Integration & E2E testing
+- `scripts/claude.md` - Utility scripts & LocalCode
+- `workflows/claude.md` - Multi-agent workflows
+- `monitor/claude.md` - Phoenix LiveView dashboard
+- `docker/claude.md` - Deployment & containerization
 
 **When working in a specific directory, reference its `claude.md` for focused context.**
 
@@ -54,606 +40,235 @@ echo/
 ### Rule 1: Never Break Existing Tests
 - **ALWAYS run tests** before committing changes
 - All tests must pass: `cd shared && mix test`
-- Agents must compile: `cd agents/{role} && mix compile`
 - If tests fail, fix the code, don't modify tests to pass
 
 ### Rule 2: Respect the Autonomous Flag
 - Agents run as MCP servers by default (stdio mode)
 - Use `--autonomous` flag for standalone mode: `./ceo --autonomous`
 - MCP servers exit when stdin closes - this is expected behavior
-- Don't try to "fix" this - it's by design
 
 ### Rule 3: Compile Shared Library First
 - The `shared/` library is a dependency for all agents
-- Always compile shared before agents:
-  ```bash
-  cd shared && mix compile
-  cd agents/ceo && mix deps.get && mix compile
-  ```
-- Agents won't compile if shared library has errors
+- Always compile shared before agents: `cd shared && mix compile`
 
 ### Rule 4: Database Safety
 - **NEVER run** `mix ecto.drop` or `mix ecto.reset` without explicit user permission
-- Database contains organizational memory across all agents
 - Use migrations for schema changes: `mix ecto.migrate`
-- Test migrations with rollback: `mix ecto.rollback`
 
 ### Rule 5: Don't Overengineer
 - Start with the simplest solution
 - Consult the user before adding complexity
-- ECHO already has complex architecture - keep implementations simple
 - Follow existing patterns before inventing new ones
 
 ### Rule 6: MCP Protocol Compliance
-- Agents must implement MCP 2024-11-05 specification
 - Use `EchoShared.MCP.Server` behavior - don't roll your own
 - JSON-RPC 2.0 over stdio is the transport layer
-- Standard methods: `initialize`, `tools/list`, `tools/call`
 
 ### Rule 7: Message Bus Discipline
 - All inter-agent communication via Redis pub/sub
 - Use `EchoShared.MessageBus` functions
-- Messages must also persist to PostgreSQL
 - Never bypass the message bus for direct communication
 
 ### Rule 8: Dual-AI Workflow (Claude Code + LocalCode)
 
-**ECHO now has TWO AI assistant systems working together:**
+**ECHO has TWO AI assistant systems:**
 
-#### 8.1 LocalCode - Local LLM System
-
-**What is LocalCode?**
-- Replicates Claude Code's startup flow for local LLMs (deepseek-coder:6.7b)
-- $0 cost, 100% private, project-aware AI assistant
-- Loads CLAUDE.md automatically, maintains conversation memory, simulates tools
-- Response time: 7-30 seconds typical
-- Session capacity: 10-12 conversational turns before restart needed
+**LocalCode** - Local LLM assistant (deepseek-coder:6.7b)
+- $0 cost, 100% private, project-aware
+- Response time: 7-30 seconds
+- Session capacity: 10-12 conversational turns
 
 **Quick Commands:**
 ```bash
-# Load helper functions (once per terminal session)
-source ./scripts/llm/localcode_quick.sh
-
-# Start session - auto-loads this CLAUDE.md, git context, system status
-lc_start [path]
-
-# Query local LLM - uses deepseek-coder:6.7b
-lc_query "your question"
-
-# Interactive mode - continuous conversation
-lc_interactive
-
-# End session - archives conversation
-lc_end
-
-# Session management
-lc_list    # List active sessions
-lc_show    # Show current session details
+source ./scripts/llm/localcode_quick.sh  # Load once per terminal
+lc_start        # Start session with auto-context
+lc_query "..."  # Query local LLM
+lc_interactive  # Interactive mode
+lc_end          # End and archive session
 ```
 
-**Context Injection (Automatic):**
-LocalCode automatically provides to deepseek-coder:6.7b:
-- ✅ This CLAUDE.md file (first 200 lines) - ~1,500 tokens
-- ✅ System status from `.claude/hooks/session-start.sh`
-- ✅ Git context (branch, last commit, changed files)
-- ✅ Directory structure (top-level)
-- ✅ Conversation history (last 5 turns) - ~500-2000 tokens
-- ✅ Tool execution results (last 3) - if applicable
-- **Total startup context:** ~1,900 tokens
-- **Warning at:** >3,000 tokens (moderate), >4,000 (high), >6,000 (blocked)
-
-**Tool Simulation:**
-Local LLM can request tools (auto-detected and executed):
-```
-TOOL_REQUEST: read_file(apps/ceo/lib/ceo.ex)
-TOOL_REQUEST: grep_code(MessageBus.publish)
-TOOL_REQUEST: glob_files(*.ex)
-TOOL_REQUEST: run_bash(git log --oneline -5)
-```
-
-#### 8.2 When to Use Which AI
-
-**Use Claude Code (Me) for:**
-- ✅ Complex architectural decisions (multi-file changes)
-- ✅ Long-running tasks (refactoring, test writing)
-- ✅ Code generation (new features, scaffolding)
-- ✅ Multi-step workflows (plan → implement → test)
-- ✅ File editing and git operations
-- ✅ Tasks requiring >10 steps or >30 minutes
-
-**Use LocalCode (lc_query) for:**
-- ✅ Quick questions ("How does X work?")
-- ✅ Code exploration ("What's in this file?")
-- ✅ Documentation lookup ("What does this function do?")
-- ✅ Debugging hints ("Why might this fail?")
-- ✅ Architecture clarifications ("How do agents communicate?")
-- ✅ Tasks requiring <5 steps or <5 minutes
-
-**Use BOTH (Dual Perspective) for:**
-- 🤝 Code reviews (get two opinions)
-- 🤝 Architectural analysis (different perspectives)
-- 🤝 Design decisions (compare approaches)
-- 🤝 Complex debugging (more insights)
-- 🤝 Security/performance audits (thorough analysis)
-
-#### 8.3 Dual Perspective Response Format
-
-When appropriate, present both AI perspectives:
-
-```
-🤖 Local LLM (deepseek-coder:6.7b):
-[Fast, specialized coding perspective from local model]
-
-💭 Claude Code Analysis:
-[Comprehensive analysis from frontier model]
-```
-
-**How to get dual perspective:**
-```bash
-# 1. Query local LLM first
-lc_query "Analyze the MessageBus implementation for issues"
-
-# 2. Then ask Claude Code the same question
-# Claude will provide complementary analysis
-```
-
-#### 8.4 LocalCode Session Management Rules
-
-**Best Practices:**
-- 📏 **Context awareness** - Watch for warnings: ⚠️ "Context moderate/large"
-- 🔄 **Session rotation** - Start fresh every 5-8 turns or when warned
-- 💾 **Clean exits** - Always `lc_end` to archive conversation
-- 🎯 **Focused queries** - Keep questions specific (reduces context growth)
-- 🔧 **Tool usage** - Let LLM request tools (don't paste huge code blocks)
-
-**Context Growth Pattern:**
-```
-Turn 0 (startup):  1,936 tokens
-Turn 1:            2,061 tokens (+125)
-Turn 3:            2,530 tokens (+469)
-Turn 5:            3,376 tokens (+846) ⚠️ Moderate warning
-Turn 8-10:         4,000 tokens        ⚠️ High warning
-Turn 12-15:        6,000 tokens        🚨 Session restart required
-```
-
-**When to restart session:**
-- ⚠️ You see "Context moderate" warning
-- 🔄 Changed project branches/directories
-- 🎯 Switching to different topic/task
-- 💾 After 5-8 conversational turns
-
-#### 8.5 LocalCode vs Claude Code Comparison
-
-| Feature | LocalCode | Claude Code (Me) |
-|---------|-----------|------------------|
-| **Cost** | $0 (local) | $0.015/query (API) |
-| **Privacy** | 100% local | Cloud-based |
-| **Speed** | 7-30s | 2-5s |
-| **Context** | 8K window (~6K safe) | 200K window |
-| **Memory** | Session-based | Native |
-| **Tools** | Simulated | Native |
-| **Quality** | Good (6.7B) | Excellent (Sonnet 4.5) |
-| **Project Aware** | ✅ Yes | ✅ Yes |
-| **Best For** | Quick queries | Complex tasks |
-
-#### 8.6 Integration with ECHO Agents
-
-**Future enhancement:** ECHO agents can use LocalCode internally:
-```elixir
-# Instead of:
-DecisionHelper.consult(:ceo, question, context)
-
-# Could use:
-LocalCode.query(session_id, question, context)
-# Returns: Project-aware, conversational AI response
-```
-
-**Benefits for agents:**
-- Each agent gets project-aware reasoning
-- $0 cost per consultation
-- 100% private (no external API calls)
-- Conversation memory across agent interactions
-
-#### 8.7 Configuration & Environment
-
-**Environment variables:**
-```bash
-export LLM_MODEL="deepseek-coder:6.7b"  # Model to use
-export LLM_TIMEOUT=180                  # Query timeout (3 minutes)
-export OLLAMA_ENDPOINT="http://localhost:11434"
-```
-
-**Alternative models:**
-```bash
-export LLM_MODEL="llama3.1:8b"          # Faster, general purpose
-export LLM_MODEL="deepseek-coder:33b"   # Slower, more powerful
-export LLM_MODEL="qwen2.5:14b"          # Best reasoning
-export LLM_MODEL="codellama:13b"        # Code-focused
-```
-
-#### 8.8 Documentation & Help
-
-**Full documentation:**
-- `scripts/llm/QUICK_START.md` - Simple tutorial
-- `scripts/llm/LOCALCODE_GUIDE.md` - Complete reference
-- `scripts/llm/README.md` - Context injection architecture
-- `scripts/llm/EFFICIENCY_TEST_RESULTS.md` - Performance analysis
-
-**Quick help:**
-```bash
-source ./scripts/llm/localcode_quick.sh
-# Displays available commands automatically
-```
-
-#### 8.9 Common Pitfalls & Solutions
-
-**Issue:** "Failed to get response from Ollama"
-```bash
-# Check Ollama is running
-curl http://localhost:11434/api/tags
-
-# Check model exists
-ollama list | grep deepseek-coder
-
-# Pull model if missing
-ollama pull deepseek-coder:6.7b
-```
-
-**Issue:** "Context too large" warning
-```bash
-# Solution 1: End and restart session
-lc_end && lc_start
-
-# Solution 2: Use shorter questions
-# Instead of: "Explain everything about X, Y, Z..."
-# Do: "What is X?" then "How does Y work?" then "Explain Z"
-
-# Solution 3: Clear tool results (if many tools used)
-# Restart session to clear accumulated tool outputs
-```
-
-**Issue:** Slow responses (>60 seconds)
-```bash
-# Solution 1: Increase timeout
-export LLM_TIMEOUT=300  # 5 minutes
-
-# Solution 2: Use smaller/faster model
-export LLM_MODEL="deepseek-coder:1.3b"
-
-# Solution 3: Reduce context
-# Keep questions shorter, restart session more frequently
-```
-
-**Issue:** Inaccurate responses
-```bash
-# LocalCode is good but not perfect. For critical tasks:
-# 1. Use dual perspective (check with Claude Code)
-# 2. Verify answers against code/docs
-# 3. Use larger model (deepseek-coder:33b or qwen2.5:14b)
-```
-
-#### 8.10 Workflow Integration Examples
-
-**Example 1: Code Review Workflow**
-```bash
-# 1. Start session
-lc_start
-
-# 2. Quick understanding
-lc_query "What does apps/ceo/lib/ceo.ex do?"
-
-# 3. Detailed review
-lc_query "Review the approve_strategic_initiative function for bugs"
-
-# 4. Get second opinion from Claude Code
-# Ask me: "Review approve_strategic_initiative in apps/ceo/lib/ceo.ex"
-
-# 5. Compare insights
-# Local LLM: Fast, code-focused feedback
-# Claude Code: Deeper architectural concerns
-```
-
-**Example 2: Debugging Workflow**
-```bash
-lc_start
-
-# Quick diagnosis
-lc_query "I'm getting 'connection refused' to Redis. What could cause this?"
-
-# If tool request appears
-# LocalCode auto-executes: run_bash(docker ps | grep redis)
-
-# Get detailed fix
-lc_query "How do I fix Redis connection in ECHO?"
-
-# For implementation, switch to Claude Code
-# I'll help write the actual fix with proper error handling
-```
-
-**Example 3: Learning Workflow**
-```bash
-lc_interactive
-
-> What are the 9 agents in ECHO?
-[Gets overview]
-
-> How does the CEO agent make decisions?
-[Learns about DecisionEngine]
-
-> Show me an example of autonomous vs collaborative mode
-[Gets code examples]
-
-> What happens if CEO budget limit is exceeded?
-[Understands escalation flow]
-
-> exit
-
-# Now have full context, ready to implement features
-```
-
-**Example 4: Architecture Exploration**
-```bash
-lc_start
-
-# High-level
-lc_query "Explain ECHO's message bus architecture"
-
-# Dive deeper
-lc_query "What's the dual-write pattern in MessageBus?"
-
-# Potential issues
-lc_query "What race conditions exist in the message bus?"
-
-# Get comprehensive analysis from Claude Code
-# Ask me: "Do deep architectural review of MessageBus with race condition analysis"
-# I'll provide extensive analysis + code fixes
-```
-
-#### 8.11 Testing & Validation
-
-**Verified performance (see EFFICIENCY_TEST_RESULTS.md):**
-- ✅ Response times: 7-30 seconds (acceptable)
-- ✅ Context capacity: 10-12 conversational turns
-- ✅ Quality: Accurate, project-aware responses (4/5 stars)
-- ✅ Warning system: Triggers correctly at >3K tokens
-- ✅ Overall grade: A- (4.25/5 stars)
-
-**Tested scenarios:**
-1. Simple queries (1 sentence) - 7s response, excellent quality
-2. Medium queries (architecture) - 10-15s, good quality
-3. Complex queries (multi-part) - 20-30s, good quality
-4. Context warnings - Correctly triggered at 3,376 tokens
-
-#### 8.12 Summary: Dual-AI Development Workflow
-
-**The Power of Two AI Systems:**
-
-```
-┌─────────────────────────────────────────────────┐
-│                                                 │
-│  Quick Question? → lc_query "..."              │
-│  Complex Task?   → Ask Claude Code             │
-│  Need Both?      → Dual Perspective Review     │
-│                                                 │
-│  Result: Faster development, better quality    │
-│          $0 cost for quick queries             │
-│          100% private for sensitive code       │
-│                                                 │
-└─────────────────────────────────────────────────┘
-```
-
-**Golden Rule:**
-Start with LocalCode for exploration → Switch to Claude Code for implementation → Use both for validation
-
-**This is a force multiplier for ECHO development!** 🚀
+**When to Use:**
+- **Claude Code (me):** Complex tasks, multi-file changes, refactoring, git operations
+- **LocalCode:** Quick questions, code exploration, documentation lookup, debugging hints
+- **Both:** Code reviews, architectural decisions, dual perspectives
+
+**Context Awareness:**
+- Startup: ~1,900 tokens (CLAUDE.md first 200 lines + git + system status)
+- Warning at: >3,000 tokens (moderate), >4,000 (high), >6,000 (restart required)
+- Restart session every 5-8 turns to avoid context overflow
+
+**Full LocalCode documentation:** See `scripts/claude.md` (Rule 8 complete guide, 400+ lines) or `scripts/llm/QUICK_START.md`
 
 ### Rule 9: Documentation Organization
 
-**All documentation must be organized in appropriate `docs/` folders:**
-
-**Project-Level Documentation** → `./docs/`
-```
-docs/
-├── README.md                    # Documentation index
-├── architecture/                # System architecture documents
-│   ├── ECHO_ARCHITECTURE.md
-│   └── FLOW_DSL_IMPLEMENTATION.md
-├── guides/                      # User guides and tutorials
-│   ├── GETTING_STARTED.md
-│   ├── DEMO_GUIDE.md
-│   └── claude-desktop-setup.md
-├── completed/                   # Completed implementation reports
-│   ├── DAY2_TRAINING_COMPLETE.md
-│   ├── SECURITY_FIXES.md
-│   └── SCRIPT_CLEANUP_SUMMARY.md
-└── troubleshooting/            # Troubleshooting guides
-```
-
-**App-Specific Documentation** → `apps/{app_name}/docs/`
-```
-apps/
-├── echo_shared/
-│   └── docs/                   # Shared library documentation
-│       ├── README.md
-│       ├── SESSION_CONSULT_INTEGRATION_FINAL_REPORT.md
-│       └── LLM_SESSION_INTEGRATION_SUMMARY.md
-├── ceo/
-│   └── docs/                   # CEO agent documentation (if needed)
-├── cto/
-│   └── docs/                   # CTO agent documentation (if needed)
-└── ...
-```
+**All documentation organized in `docs/` folders:**
+- `docs/architecture/` - System architecture documents
+- `docs/guides/` - User guides and tutorials
+- `docs/completed/` - Completed implementation reports
+- `docs/troubleshooting/` - Troubleshooting guides
+- `apps/{app}/docs/` - App-specific documentation
 
 **Rules:**
-- ✅ **DO** create `docs/` folders in apps when adding app-specific documentation
+- ✅ **DO** create `docs/` folders when adding documentation
 - ✅ **DO** keep only `CLAUDE.md` and `README.md` at project root
-- ✅ **DO** organize by type: architecture, guides, completed, troubleshooting
-- ❌ **DON'T** leave loose `.md` files at project root (except CLAUDE.md, README.md)
-- ❌ **DON'T** create new documentation files without placing them in appropriate `docs/` folder
-- ❌ **DON'T** duplicate documentation - use symlinks or references if needed
-
-**Examples:**
-- New architecture document → `docs/architecture/`
-- Agent-specific guide → `apps/{agent}/docs/`
-- Completed feature report → `docs/completed/`
-- Troubleshooting guide → `docs/troubleshooting/`
-- General user guide → `docs/guides/`
+- ❌ **DON'T** leave loose `.md` files at project root
 
 ## 🚀 Quick Start Commands
 
 ### First Time Setup
 ```bash
-# Start infrastructure (PostgreSQL + Redis via Docker)
-docker-compose up -d
-
-# Verify containers are running
-docker ps | grep echo
-
-# Setup database and install LLMs (~48GB)
+docker-compose up -d                    # Start PostgreSQL + Redis
 cd shared && mix ecto.create && mix ecto.migrate
-./setup_llms.sh
-
-# Build all agents
-./setup.sh
+./setup_llms.sh                         # Install Ollama models (~48GB)
+./setup.sh                              # Build all agents
 ```
 
 ### Daily Development
 ```bash
-# Compile shared library
-cd shared && mix compile && mix test
-
-# Work on specific agent
-cd agents/ceo
-mix deps.get
-mix compile
-mix escript.build
-mix test
-
-# Run agent as MCP server
-./ceo  # Stdio mode for Claude Desktop
-
-# Run agent in autonomous mode
-./ceo --autonomous  # Standalone mode for testing
+cd shared && mix compile && mix test    # Compile shared library
+cd agents/ceo && mix deps.get && mix compile && mix test
+./ceo                                   # Run as MCP server
+./ceo --autonomous                      # Run in standalone mode
 ```
 
-### Testing & Verification
+### Testing & Monitoring
 ```bash
-# Check system health
-./echo.sh summary
-
-# Test LLM integration
-./scripts/agents/test_agent_llm.sh ceo
-
-# Run all agent tests
-./test_agents.sh
-
-# Monitor dashboard
-cd monitor && ./start.sh
-# Open http://localhost:4000
+./echo.sh summary                       # System health check
+./scripts/agents/test_agent_llm.sh ceo  # Test LLM integration
+cd monitor && ./start.sh                # Start dashboard (http://localhost:4000)
 ```
 
-## 🔑 Key Technologies
+## 🐛 Troubleshooting Quick Reference
 
-- **Language:** Elixir 1.18 / Erlang/OTP 27
-- **Database:** PostgreSQL 16 (ACID transactions, audit trail)
-- **Message Bus:** Redis 7 (pub/sub, real-time events)
-- **Protocol:** MCP 2024-11-05 (JSON-RPC 2.0 over stdio)
-- **AI Models:** Ollama (9 specialized local models)
-- **Dashboard:** Phoenix LiveView (real-time monitoring)
+**Database connection refused:**
+```bash
+docker-compose up -d && cd shared && mix ecto.migrate
+```
+
+**Redis connection failed:**
+```bash
+docker-compose up -d && redis-cli -h 127.0.0.1 -p 6383 ping
+```
+
+**Agent compile errors:**
+```bash
+cd shared && mix clean && mix compile
+cd agents/ceo && rm -rf _build deps && mix deps.get && mix compile
+```
+
+**LLM not responding:**
+```bash
+curl http://localhost:11434/api/tags && ollama list
+```
+
+**LocalCode issues:**
+```bash
+# Check Ollama
+curl http://localhost:11434/api/tags
+
+# Restart session if context warning
+lc_end && lc_start
+
+# Increase timeout for slow queries
+export LLM_TIMEOUT=300
+```
 
 ## 🎨 Decision Modes
 
 ECHO agents use 4 decision-making patterns:
 
 1. **Autonomous** - Agent decides within authority limits
-   ```elixir
-   %{mode: :autonomous, initiator_role: :ceo}
-   # CEO can approve budgets up to $1M without escalation
-   ```
-
 2. **Collaborative** - Multiple agents vote for consensus
-   ```elixir
-   %{mode: :collaborative, participants: [:ceo, :cto, :product_manager]}
-   # Architecture decisions require team consensus
-   ```
-
 3. **Hierarchical** - Escalates up the reporting chain
-   ```elixir
-   %{mode: :hierarchical, escalate_to: :ceo}
-   # Developer → Architect → CTO → CEO
-   ```
-
 4. **Human-in-the-Loop** - Critical decisions need human approval
-   ```elixir
-   %{mode: :human, reason: "Legal compliance", urgency: :high}
-   # Regulatory, financial, or strategic risks
-   ```
 
-## 📊 Database Schema Overview
+See `apps/echo_shared/claude.md` for detailed decision engine documentation.
 
-**decisions** - Organizational decisions with mode, status, consensus
-**messages** - Inter-agent communications with threading
-**memories** - Shared organizational knowledge (key-value + tags)
-**decision_votes** - Collaborative voting records
-**agent_status** - Health monitoring and heartbeats
+## 📊 Key Database Tables
 
-See `shared/claude.md` for detailed schema documentation.
+- **decisions** - Organizational decisions with mode, status, consensus
+- **messages** - Inter-agent communications with threading
+- **memories** - Shared organizational knowledge (key-value + tags)
+- **decision_votes** - Collaborative voting records
+- **agent_status** - Health monitoring and heartbeats
 
 ## 🔌 Redis Channels
 
 ```
 messages:{role}        # Private per-agent (e.g., messages:ceo)
 messages:all           # Broadcast to all agents
-messages:leadership    # C-suite only (CEO, CTO, CHRO, Ops)
+messages:leadership    # C-suite only
 decisions:new          # New decision initiated
-decisions:vote_required # Vote needed from participant
+decisions:vote_required # Vote needed
 decisions:completed    # Decision finalized
-decisions:escalated    # Escalated to higher authority
 agents:heartbeat       # Agent health checks
 ```
 
-## 🧪 Testing Philosophy
+## ⚠️ Common Pitfalls
 
-- **Unit Tests:** Test individual components in isolation
-- **Integration Tests:** Test multi-agent workflows end-to-end
-- **System Tests:** Load testing, failover scenarios, audit trails
-- **All tests must pass before committing**
+1. **Forgetting to compile shared library first** - Always `cd shared && mix compile`
+2. **Running agents without --autonomous for testing** - Use `--autonomous` for standalone mode
+3. **Modifying database without migrations** - Use `mix ecto.gen.migration`
+4. **Bypassing message bus** - All communication must go through Redis + PostgreSQL
+5. **Not checking if PostgreSQL/Redis are running** - `docker ps | grep echo`
 
-Location: `shared/test/`, `agents/*/test/`, `test/integration/`
+## 📖 Current Phase
 
-## 📚 Documentation Map
+**Phase 4: Workflows & Integration** (In Progress)
 
-**See Rule 9 for documentation organization guidelines.**
+**Completed:**
+- ✅ Phase 1: Foundation (shared library, MCP protocol, database schemas)
+- ✅ Phase 2: CEO agent (reference implementation)
+- ✅ Phase 3: All 9 agents with LLM integration
 
-### Project Documentation (`./docs/`)
+**In Progress:**
+- 🔄 Workflow engine testing
+- 🔄 Multi-agent workflow examples
+- 🔄 Integration test suite
 
-| Document | Location | Purpose |
-|----------|----------|---------|
-| **Architecture** | | |
-| `ECHO_ARCHITECTURE.md` | `docs/architecture/` | Complete system architecture and design decisions |
-| `FLOW_DSL_IMPLEMENTATION.md` | `docs/architecture/` | Event-driven Flow DSL implementation details |
-| **Guides** | | |
-| `README.md` | `./ (root)` | User-facing getting started guide |
-| `GETTING_STARTED.md` | `docs/guides/` | Step-by-step setup instructions |
-| `DEMO_GUIDE.md` | `docs/guides/` | 10 demo scenarios with examples |
-| `claude-desktop-setup.md` | `docs/guides/` | Connect agents to Claude Desktop |
-| **Completed** | | |
-| `DAY2_TRAINING_COMPLETE.md` | `docs/completed/` | Day 2 training completion report |
-| `SECURITY_FIXES.md` | `docs/completed/` | Security hardening implementation |
-| `SCRIPT_CLEANUP_SUMMARY.md` | `docs/completed/` | Script cleanup and umbrella migration |
+## 🤝 Contributing Guidelines
 
-### App-Specific Documentation
+1. **Read the focused context** - Check the `claude.md` in the directory you're working in
+2. **Follow existing patterns** - Look at similar code before implementing
+3. **Run tests** - Always ensure tests pass
+4. **Keep it simple** - Don't overengineer solutions
+5. **Ask before major changes** - Consult user for architectural decisions
 
-| Document | Location | Purpose |
-|----------|----------|---------|
-| `apps/CLAUDE.md` | `apps/` | Agent development patterns |
-| `apps/echo_shared/CLAUDE.md` | `apps/echo_shared/` | Shared library API reference |
-| **Session Consult** | | |
-| `SESSION_CONSULT_INTEGRATION_FINAL_REPORT.md` | `apps/echo_shared/docs/` | Complete integration report |
-| `SESSION_CONSULT_INTEGRATION_COMPLETE.md` | `apps/echo_shared/docs/` | Quick reference guide |
-| `LLM_SESSION_INTEGRATION_SUMMARY.md` | `apps/echo_shared/docs/` | Integration summary |
+## 📞 Getting Help
 
-## 🔧 Environment Variables
+- **Architecture:** `docs/architecture/ECHO_ARCHITECTURE.md`
+- **Agent development:** `apps/claude.md`
+- **Shared library:** `apps/echo_shared/claude.md`
+- **Testing:** `test/claude.md`
+- **LocalCode:** `scripts/claude.md` (Rule 8 complete guide)
+- **Workflows:** `workflows/claude.md`
+- **Deployment:** `docker/claude.md`
+
+---
+
+**Remember:** This is a complex multi-agent system. Simplicity in implementation is key to maintainability.
+
+---
+
+# Detailed Documentation (Below First 200 Lines)
+
+The sections below provide comprehensive details not included in the first 200 lines for token optimization.
+
+## 🔍 9 Agent Roles (Detailed)
+
+| Agent | Model | Size | Purpose |
+|-------|-------|------|---------|
+| **CEO** | qwen2.5:14b | 14B | Strategic leadership and budget decisions |
+| **CTO** | deepseek-coder:33b | 33B | Technology strategy and architecture review |
+| **CHRO** | llama3.1:8b | 8B | People management and communication |
+| **Operations Head** | mistral:7b | 7B | Infrastructure optimization |
+| **Product Manager** | llama3.1:8b | 8B | Product strategy and prioritization |
+| **Senior Architect** | deepseek-coder:33b | 33B | System design and technical specifications |
+| **UI/UX Engineer** | llama3.2-vision:11b | 11B | Design evaluation and visual understanding |
+| **Senior Developer** | deepseek-coder:6.7b | 6.7B | Fast code generation and implementation |
+| **Test Lead** | codellama:13b | 13B | Test generation and quality assurance |
+
+## 🔧 Environment Variables (Detailed)
 
 ```bash
 # Database (Docker on port 5433)
@@ -674,101 +289,273 @@ OLLAMA_ENDPOINT=http://localhost:11434
 AUTONOMOUS_BUDGET_LIMIT=1000000  # CEO authority limit
 CEO_MODEL=qwen2.5:14b           # Override default model
 CEO_LLM_ENABLED=true            # Enable/disable LLM
+
+# LocalCode (see scripts/claude.md for details)
+LLM_MODEL=deepseek-coder:6.7b   # Model to use
+LLM_TIMEOUT=180                  # Query timeout (3 minutes)
+LOCALCODE_SESSIONS_DIR=~/.localcode/sessions/
 ```
 
-## ⚠️ Common Pitfalls
+## 📚 Documentation Map (Complete)
 
-1. **Forgetting to compile shared library first**
-   - Always `cd shared && mix compile` before working on agents
+### Project Documentation (`./docs/`)
 
-2. **Running agents without --autonomous flag for testing**
-   - MCP servers exit when stdin closes (expected)
-   - Use `--autonomous` for standalone testing
+| Document | Location | Purpose |
+|----------|----------|---------|
+| **Architecture** | | |
+| `ECHO_ARCHITECTURE.md` | `docs/architecture/` | Complete system architecture and design decisions |
+| `DELEGATOR_ARCHITECTURE.md` | `docs/architecture/` | Delegator agent resource optimization |
+| `FLOW_DSL_IMPLEMENTATION.md` | `docs/architecture/` | Event-driven Flow DSL implementation details |
+| `TOKEN_OPTIMIZATION_ANALYSIS.md` | `docs/architecture/` | Token optimization strategies and analysis |
+| **Guides** | | |
+| `README.md` | `./ (root)` | User-facing getting started guide |
+| `GETTING_STARTED.md` | `docs/guides/` | Step-by-step setup instructions |
+| `DEMO_GUIDE.md` | `docs/guides/` | 10 demo scenarios with examples |
+| `claude-desktop-setup.md` | `docs/guides/` | Connect agents to Claude Desktop |
+| `DELEGATOR_QUICK_START.md` | `docs/guides/` | Delegator agent quick start |
+| **Completed** | | |
+| `DAY2_TRAINING_COMPLETE.md` | `docs/completed/` | Day 2 training completion report |
+| `DAY3_TRAINING_COMPLETE.md` | `docs/completed/` | Day 3 training completion report |
+| `SECURITY_FIXES.md` | `docs/completed/` | Security hardening implementation |
+| `SCRIPT_CLEANUP_SUMMARY.md` | `docs/completed/` | Script cleanup and umbrella migration |
 
-3. **Modifying database without migrations**
-   - Create migration: `cd shared && mix ecto.gen.migration name`
-   - Never edit database directly
+### App-Specific Documentation
 
-4. **Bypassing message bus**
-   - All communication must go through Redis + PostgreSQL
-   - Don't create direct agent-to-agent channels
+| Document | Location | Purpose |
+|----------|----------|---------|
+| `apps/claude.md` | `apps/` | Agent development patterns |
+| `apps/echo_shared/claude.md` | `apps/echo_shared/` | Shared library API reference |
+| `apps/delegator/claude.md` | `apps/delegator/` | Delegator agent (resource optimization) |
+| **Session Consult** | | |
+| `SESSION_CONSULT_INTEGRATION_FINAL_REPORT.md` | `apps/echo_shared/docs/` | Complete integration report |
+| `LLM_SESSION_INTEGRATION_SUMMARY.md` | `apps/echo_shared/docs/` | Integration summary |
 
-5. **Not checking if PostgreSQL/Redis are running**
-   ```bash
-   docker ps | grep echo            # Check Docker containers
-   PGPASSWORD=postgres psql -h 127.0.0.1 -p 5433 -U echo_org -d echo_org -c "SELECT 1"
-   redis-cli -h 127.0.0.1 -p 6383 ping
-   ```
+## 🧪 Testing Philosophy (Detailed)
 
-## 🐛 Troubleshooting
+- **Unit Tests:** Test individual components in isolation
+  - Location: `apps/*/test/`
+  - Run: `cd apps/ceo && mix test`
+- **Integration Tests:** Test multi-agent workflows end-to-end
+  - Location: `test/integration/`
+  - See `test/claude.md` for patterns
+- **System Tests:** Load testing, failover scenarios, audit trails
+  - Location: `test/e2e/`
+  - Tagged with `@moduletag :e2e`
+- **All tests must pass before committing**
 
-**"Database connection refused"**
-```bash
-docker-compose up -d              # Start containers
-docker ps | grep echo_postgres    # Verify running
-cd shared && mix ecto.migrate
-```
+## 🚀 Complete Deployment Guide
 
-**"Redis connection failed"**
-```bash
-docker-compose up -d              # Start containers
-docker ps | grep echo_redis       # Verify running
-redis-cli -h 127.0.0.1 -p 6383 ping  # Should return PONG
-```
-
-**"Agent not receiving messages"**
-```bash
-redis-cli
-> SUBSCRIBE messages:ceo  # Test subscription
-```
-
-**"Compile errors in agent"**
-```bash
-cd shared && mix clean && mix compile
-cd agents/ceo && rm -rf _build deps && mix deps.get && mix compile
-```
-
-**"LLM not responding"**
-```bash
-curl http://localhost:11434/api/tags  # Check Ollama is running
-ollama list                           # List installed models
-```
-
-## 📖 Current Phase
-
-**Phase 4: Workflows & Integration** (In Progress)
-
-**Completed:**
-- ✅ Phase 1: Foundation (shared library, MCP protocol, database schemas)
-- ✅ Phase 2: CEO agent (reference implementation)
-- ✅ Phase 3: All 9 agents with LLM integration
-
-**In Progress:**
-- 🔄 Workflow engine testing
-- 🔄 Multi-agent workflow examples
-- 🔄 Integration test suite
-
-**Roadmap:**
-- Production deployment guides
+See `docker/claude.md` for:
+- Docker Compose setup
 - Kubernetes manifests
-- Advanced workflow patterns
+- Production deployment
+- Scaling strategies
+- Monitoring and logging
 
-## 🤝 Contributing Guidelines
+## 📈 Performance & Monitoring
 
-1. **Read the focused context** - Check the `claude.md` in the directory you're working in
-2. **Follow existing patterns** - Look at similar code before implementing
-3. **Run tests** - Always ensure tests pass
-4. **Keep it simple** - Don't overengineer solutions
-5. **Ask before major changes** - Consult user for architectural decisions
+### Monitor Dashboard
+```bash
+cd monitor && ./start.sh
+# Open http://localhost:4000
+```
 
-## 📞 Getting Help
+**Features:**
+- Real-time agent activity
+- Decision flow tracking
+- Performance metrics
+- Activity timeline
 
-- **Architecture questions:** See `ECHO_ARCHITECTURE.md`
-- **Agent development:** See `agents/claude.md`
-- **Shared library:** See `shared/claude.md`
-- **Workflows:** See `workflows/claude.md`
-- **Deployment:** See `docker/claude.md`
+See `monitor/claude.md` for dashboard development.
+
+## 🔐 Security Best Practices
+
+1. **Never commit secrets** - Use environment variables
+2. **Validate all MCP tool inputs** - Prevent injection attacks
+3. **Respect agent authority limits** - Check before executing
+4. **Audit trail** - All decisions and messages persisted
+5. **Database transactions** - Use Ecto transactions for consistency
+
+See `docs/completed/SECURITY_FIXES.md` for security hardening details.
+
+## 🎯 Advanced Topics
+
+### LocalCode - Complete Guide
+
+See `scripts/claude.md` for comprehensive LocalCode documentation including:
+- Context injection architecture (tiered system)
+- Tool simulation (auto-detection and execution)
+- Session management (lifecycle, context growth)
+- Dual perspective workflows (LocalCode + Claude Code)
+- Configuration and environment variables
+- Performance metrics and optimization
+- Troubleshooting guide
+- 10+ workflow integration examples
+
+**Key features:**
+- $0 cost per query (local inference)
+- 100% private (no external API calls)
+- Project-aware (auto-loads CLAUDE.md, git context, system status)
+- Tool simulation (read_file, grep_code, glob_files, run_bash)
+- Conversation memory (last 5 turns)
+- Context warnings (prevents overflow)
+
+**When to use LocalCode:**
+- Quick questions: "How does X work?"
+- Code exploration: "What's in this file?"
+- Documentation lookup: "What does this function do?"
+- Debugging hints: "Why might this fail?"
+- Architecture clarifications: "How do agents communicate?"
+
+**When to use Claude Code:**
+- Complex architectural decisions
+- Multi-file refactoring
+- Code generation (new features)
+- Test writing and execution
+- Git operations (commits, PRs)
+- Tasks requiring >10 steps or >30 minutes
+
+**Dual perspective approach:**
+1. Query LocalCode for fast, code-focused perspective
+2. Query Claude Code for comprehensive analysis
+3. Compare insights for best outcome
+
+### Delegator Agent
+
+See `apps/delegator/claude.md` for complete delegator documentation.
+
+**Purpose:** Intelligent agent coordinator that spawns only required agents per session.
+
+**Benefits:**
+- ⚡ 50-85% reduction in CPU/memory usage
+- 🚀 Faster startup (load only necessary LLMs)
+- 🎯 Better UX (relevant agents for task)
+- 💰 Resource efficiency (scale based on needs)
+
+**Example:**
+```
+Task: "Fix typo in README"
+Before: 9 agents loaded (~48GB)
+After: 1 agent loaded (Developer, ~7GB)
+Savings: 85% memory reduction
+```
+
+### Workflows
+
+See `workflows/claude.md` for multi-agent workflow patterns and orchestration.
+
+## 🛠️ Advanced Troubleshooting
+
+### Debug Mode
+```bash
+# Enable debug logging for agent
+export AGENT_LOG_LEVEL=debug
+./ceo --autonomous
+
+# Enable debug logging for shared library
+export ECHO_SHARED_LOG_LEVEL=debug
+```
+
+### Database Issues
+```bash
+# Stale connections
+cd shared && MIX_ENV=test mix ecto.reset
+
+# Migration conflicts
+cd shared && mix ecto.rollback && mix ecto.migrate
+
+# Permission issues
+GRANT ALL PRIVILEGES ON DATABASE echo_org TO echo_org;
+```
+
+### Redis Issues
+```bash
+# Clear all keys (WARNING: destructive)
+redis-cli -h 127.0.0.1 -p 6383 FLUSHALL
+
+# Monitor messages in real-time
+redis-cli -h 127.0.0.1 -p 6383
+> SUBSCRIBE messages:all
+
+# Check memory usage
+redis-cli -h 127.0.0.1 -p 6383 INFO memory
+```
+
+### Ollama / LLM Issues
+```bash
+# Check Ollama status
+curl http://localhost:11434/api/tags
+
+# List installed models
+ollama list
+
+# Pull missing model
+ollama pull deepseek-coder:6.7b
+
+# Test model inference
+curl http://localhost:11434/api/generate -d '{
+  "model": "deepseek-coder:6.7b",
+  "prompt": "def hello():",
+  "stream": false
+}'
+
+# Monitor Ollama logs
+docker logs -f ollama  # If running in Docker
+```
+
+### LocalCode Troubleshooting
+
+See `scripts/claude.md` (Section 8.9) for complete LocalCode troubleshooting guide.
+
+**Common issues:**
+- "Failed to get response from Ollama" → Check Ollama running, increase timeout
+- "Context too large" warning → Restart session (`lc_end && lc_start`)
+- Slow responses (>60s) → Use smaller model or increase timeout
+- Inaccurate responses → Use dual perspective (check with Claude Code)
+
+## 🎓 Learning Resources
+
+### For New Contributors
+
+1. Start with `README.md` - High-level overview
+2. Read `CLAUDE.md` (this file) - Development guidelines
+3. Explore `docs/guides/GETTING_STARTED.md` - Step-by-step setup
+4. Study `apps/claude.md` - Agent development patterns
+5. Review `apps/ceo/` - Reference implementation
+6. Experiment with `scripts/llm/` - Try LocalCode assistant
+
+### For Advanced Development
+
+1. `docs/architecture/ECHO_ARCHITECTURE.md` - Deep dive into system design
+2. `apps/echo_shared/claude.md` - Shared library internals
+3. `workflows/claude.md` - Multi-agent orchestration
+4. `test/claude.md` - Integration testing patterns
+5. `docker/claude.md` - Production deployment
+
+## 📊 Project Statistics
+
+- **Total Lines of Code:** ~15,000+ (Elixir)
+- **Number of Agents:** 9 independent MCP servers
+- **LLM Models:** 9 specialized models (~48GB total)
+- **Database Tables:** 6 core tables (decisions, messages, memories, etc.)
+- **Redis Channels:** 10+ pub/sub channels
+- **Claude.md Files:** 12 files (127KB total documentation)
+- **Test Coverage:** >80% (unit + integration tests)
+
+## 🌟 Future Roadmap
+
+**Phase 5: Production Readiness**
+- Kubernetes deployment automation
+- Horizontal scaling for agents
+- Load balancing and failover
+- Advanced monitoring and alerting
+
+**Phase 6: Advanced Features**
+- Inter-organization communication
+- External API integrations
+- Machine learning for decision optimization
+- Natural language workflow definitions
 
 ---
 
-**Remember:** This is a complex multi-agent system. Simplicity in implementation is key to maintainability.
+**End of CLAUDE.md** - For detailed context on specific areas, see the focused `claude.md` files in each directory.

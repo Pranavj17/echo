@@ -5,6 +5,7 @@ defmodule Echo.MixProject do
     [
       apps: [
         :echo_shared,
+        :delegator,
         :ceo,
         :cto,
         :chro,

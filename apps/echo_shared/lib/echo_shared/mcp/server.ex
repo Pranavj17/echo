@@ -150,6 +150,14 @@ defmodule EchoShared.MCP.Server do
             response = Protocol.success_response(id, result)
             send_response(response)
 
+          {:ok, content} when is_map(content) ->
+            # Handle map results (e.g., from session_consult tool)
+            # Convert map to JSON string for MCP response
+            result_text = Jason.encode!(content)
+            result = Protocol.tools_call_response(result_text)
+            response = Protocol.success_response(id, result)
+            send_response(response)
+
           {:error, reason} ->
             error_codes = Protocol.error_codes()
 

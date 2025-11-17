@@ -863,20 +863,25 @@ defmodule Ceo do
     DecisionHelper.consult(:ceo, question, context)
   end
 
-  defp format_session_response(result) do
-    model = EchoShared.LLM.Config.get_model(:ceo)
+  defp format_session_response(result) when is_map(result) do
+    # Handle both atom and string keys from DecisionHelper.consult_session
+    response = result["response"] || result[:response]
+    session_id = result["session_id"] || result[:session_id]
+    turn_count = result["turn_count"] || result[:turn_count]
+    total_tokens = result["estimated_tokens"] || result[:total_tokens] || result["total_tokens"]
+    warnings = result["warnings"] || result[:warnings] || []
 
     base = %{
-      "response" => result.response,
-      "session_id" => result.session_id,
-      "turn_count" => result.turn_count,
-      "estimated_tokens" => result.total_tokens,
-      "model" => model,
-      "agent" => "ceo"
+      "response" => response,
+      "session_id" => session_id,
+      "turn_count" => turn_count,
+      "estimated_tokens" => total_tokens,
+      "model" => result["model"] || EchoShared.LLM.Config.get_model(:ceo),
+      "agent" => result["agent"] || "ceo"
     }
 
-    if result.warnings != [] do
-      Map.put(base, "warnings", result.warnings)
+    if warnings != [] do
+      Map.put(base, "warnings", warnings)
     else
       base
     end
