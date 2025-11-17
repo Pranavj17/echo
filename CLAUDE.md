@@ -27,11 +27,17 @@ Each major directory has its own `claude.md` with focused context:
 - `/CLAUDE.md` - This file (project overview & critical rules)
 - `apps/claude.md` - Agent development patterns
 - `apps/echo_shared/claude.md` - Shared library API
-- `test/claude.md` - Integration & E2E testing
-- `scripts/claude.md` - Utility scripts & LocalCode
-- `workflows/claude.md` - Multi-agent workflows
+- `apps/delegator/claude.md` - Delegator agent (resource optimization)
+- `test/claude.md` - Integration & E2E testing patterns
+- `scripts/claude.md` - Utility scripts & LocalCode complete guide
+- `workflows/claude.md` - Multi-agent workflow orchestration
 - `monitor/claude.md` - Phoenix LiveView dashboard
-- `docker/claude.md` - Deployment & containerization
+- `docker/claude.md` - Docker & deployment
+- `k8s/claude.md` - Kubernetes production deployment
+- `benchmark_models/claude.md` - LLM performance benchmarking
+- `training/claude.md` - Training scripts & best practices
+
+**Reusable snippets:** `docs/snippets/` - Common troubleshooting & patterns
 
 **When working in a specific directory, reference its `claude.md` for focused context.**
 
@@ -238,11 +244,15 @@ agents:heartbeat       # Agent health checks
 
 - **Architecture:** `docs/architecture/ECHO_ARCHITECTURE.md`
 - **Agent development:** `apps/claude.md`
+- **Delegator (resource optimization):** `apps/delegator/claude.md`
 - **Shared library:** `apps/echo_shared/claude.md`
 - **Testing:** `test/claude.md`
 - **LocalCode:** `scripts/claude.md` (Rule 8 complete guide)
 - **Workflows:** `workflows/claude.md`
-- **Deployment:** `docker/claude.md`
+- **Deployment (Docker):** `docker/claude.md`
+- **Deployment (Kubernetes):** `k8s/claude.md`
+- **LLM Benchmarking:** `benchmark_models/claude.md`
+- **Common troubleshooting:** `docs/snippets/` (database, Ollama, testing, git)
 
 ---
 
