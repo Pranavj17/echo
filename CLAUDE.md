@@ -23,23 +23,10 @@ Claude Desktop / MCP Client
 
 ## 📂 Repository Structure
 
-Each major directory has its own `claude.md` with focused context:
-- `/CLAUDE.md` - This file (project overview & critical rules)
-- `apps/claude.md` - Agent development patterns
-- `apps/echo_shared/claude.md` - Shared library API
-- `apps/delegator/claude.md` - Delegator agent (resource optimization)
-- `test/claude.md` - Integration & E2E testing patterns
-- `scripts/claude.md` - Utility scripts & LocalCode complete guide
-- `workflows/claude.md` - Multi-agent workflow orchestration
-- `monitor/claude.md` - Phoenix LiveView dashboard
-- `docker/claude.md` - Docker & deployment
-- `k8s/claude.md` - Kubernetes production deployment
-- `benchmark_models/claude.md` - LLM performance benchmarking
-- `training/claude.md` - Training scripts & best practices
+**12 focused `claude.md` files** (see each directory):
+`apps/` `apps/echo_shared/` `apps/delegator/` `test/` `scripts/` `workflows/` `monitor/` `docker/` `k8s/` `benchmark_models/` `training/`
 
-**Reusable snippets:** `docs/snippets/` - Common troubleshooting & patterns
-
-**When working in a specific directory, reference its `claude.md` for focused context.**
+**Reusable snippets:** `docs/snippets/` | **Full index:** `docs/INDEX.md`
 
 ## 🚨 Critical Rules - READ FIRST
 
@@ -119,96 +106,28 @@ lc_end          # End and archive session
 - ✅ **DO** keep only `CLAUDE.md` and `README.md` at project root
 - ❌ **DON'T** leave loose `.md` files at project root
 
-## 🚀 Quick Start Commands
+## 🚀 Quick Start
 
-### First Time Setup
-```bash
-docker-compose up -d                    # Start PostgreSQL + Redis
-cd shared && mix ecto.create && mix ecto.migrate
-./setup_llms.sh                         # Install Ollama models (~48GB)
-./setup.sh                              # Build all agents
-```
+**Setup:** `docker-compose up -d && cd shared && mix ecto.create && mix ecto.migrate && ./setup_llms.sh && ./setup.sh`
+**Dev:** `cd shared && mix compile && mix test` → `cd apps/ceo && mix compile && ./ceo --autonomous`
+**Monitor:** `cd monitor && ./start.sh` (http://localhost:4000)
 
-### Daily Development
-```bash
-cd shared && mix compile && mix test    # Compile shared library
-cd agents/ceo && mix deps.get && mix compile && mix test
-./ceo                                   # Run as MCP server
-./ceo --autonomous                      # Run in standalone mode
-```
+## 🐛 Troubleshooting
 
-### Testing & Monitoring
-```bash
-./echo.sh summary                       # System health check
-./scripts/agents/test_agent_llm.sh ceo  # Test LLM integration
-cd monitor && ./start.sh                # Start dashboard (http://localhost:4000)
-```
+**DB/Redis:** `docker-compose up -d && cd shared && mix ecto.migrate`
+**Compile:** `cd shared && mix clean && mix compile`
+**LLM:** `curl http://localhost:11434/api/tags && ollama list`
+**LocalCode:** `lc_end && lc_start` or `export LLM_TIMEOUT=300`
 
-## 🐛 Troubleshooting Quick Reference
+**Full guide:** `docs/snippets/` (database, ollama, testing, git)
 
-**Database connection refused:**
-```bash
-docker-compose up -d && cd shared && mix ecto.migrate
-```
+## 🎨 Core Concepts
 
-**Redis connection failed:**
-```bash
-docker-compose up -d && redis-cli -h 127.0.0.1 -p 6383 ping
-```
+**Decision Modes:** Autonomous | Collaborative | Hierarchical | Human-in-the-Loop
+**DB Tables:** decisions, messages, memories, decision_votes, agent_status
+**Redis Channels:** messages:{role}, messages:all, decisions:*, agents:heartbeat
 
-**Agent compile errors:**
-```bash
-cd shared && mix clean && mix compile
-cd agents/ceo && rm -rf _build deps && mix deps.get && mix compile
-```
-
-**LLM not responding:**
-```bash
-curl http://localhost:11434/api/tags && ollama list
-```
-
-**LocalCode issues:**
-```bash
-# Check Ollama
-curl http://localhost:11434/api/tags
-
-# Restart session if context warning
-lc_end && lc_start
-
-# Increase timeout for slow queries
-export LLM_TIMEOUT=300
-```
-
-## 🎨 Decision Modes
-
-ECHO agents use 4 decision-making patterns:
-
-1. **Autonomous** - Agent decides within authority limits
-2. **Collaborative** - Multiple agents vote for consensus
-3. **Hierarchical** - Escalates up the reporting chain
-4. **Human-in-the-Loop** - Critical decisions need human approval
-
-See `apps/echo_shared/claude.md` for detailed decision engine documentation.
-
-## 📊 Key Database Tables
-
-- **decisions** - Organizational decisions with mode, status, consensus
-- **messages** - Inter-agent communications with threading
-- **memories** - Shared organizational knowledge (key-value + tags)
-- **decision_votes** - Collaborative voting records
-- **agent_status** - Health monitoring and heartbeats
-
-## 🔌 Redis Channels
-
-```
-messages:{role}        # Private per-agent (e.g., messages:ceo)
-messages:all           # Broadcast to all agents
-messages:leadership    # C-suite only
-decisions:new          # New decision initiated
-decisions:vote_required # Vote needed
-decisions:completed    # Decision finalized
-agents:heartbeat       # Agent health checks
-```
+See `apps/echo_shared/claude.md` for details.
 
 ## ⚠️ Common Pitfalls
 
